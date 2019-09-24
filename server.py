@@ -209,7 +209,7 @@ class Connection:
         self.END_MARKER = "-".encode(self.CODEC)
         self.connections = list()
 
-        HOST = "192.168.178.141"
+        HOST = "127.0.0.1"
         PORT = 10009
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
