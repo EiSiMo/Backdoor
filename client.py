@@ -5,8 +5,8 @@ import subprocess
 import base64
 import socket
 import sys
+# non-standard libraries
 import mss
-import mss.tools
 
 
 class Client:
@@ -83,7 +83,7 @@ class Connection:
         self.END_MARKER = "-".encode(self.CODEC)
         self.PACKET_SIZE = 1024
 
-        HOST = "192.168.178.141"
+        HOST = "127.0.0.1"
         PORT = 10009
 
         if len(sys.argv) == 3:
@@ -112,9 +112,9 @@ class Connection:
 
 if __name__ == "__main__":
     while True:
-        #try:
-        client = Client()
-            #if client.exit:
-                #break
-        #except:
-            #pass
+        try:
+            client = Client()
+            if client.exit:
+                break
+        except:
+            pass
