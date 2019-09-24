@@ -18,7 +18,7 @@ The server uses a group system to control the clients. You can address them with
 In some commands I had to split the attributes with " @ " because I wanted to be able to send spaces for example: "c echo test @ all" here I couldn't make out the point where the second argument starts so i needed the " @ ".
 
 * "h" - show command list
-* "o [option*] [value]" - set option; option can be "cmd_timeout"; value is timeout in seconds
+* "o [option] [value]" - set option; option can be "cmd_timeout"; value is timeout in seconds
 * "l [clients]" - print a table of the clients
 * "t [tag] @ [clients]" - tag clients(tags can be seen when you list clients. They are just to keep better track)
 * "r [clients]" - remove clients
@@ -28,5 +28,10 @@ In some commands I had to split the attributes with " @ " because I wanted to be
 * "u [path to open] @ [path to save] @ [clients]" - upload a file to target
 * "s [monitor] @ [path_to_save] @ [clients]" - capture screenshot; monitor can be -1 for all monitors or 0, 1, 2, ... for one specific
 * "x" - exit server
+
+## Required modules
+
+* texttable
+* mss
 
 This is my first project on github so feel free to give tips.

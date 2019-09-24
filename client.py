@@ -73,7 +73,6 @@ class Client:
             error = "[-] InvalidMonitorIndex"
         except FileNotFoundError:
             error = "[-] FileNotFoundError"
-        print(error)
         self.connection.send(error.encode(self.connection.CODEC), self.connection.sock)
 
 
