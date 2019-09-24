@@ -14,7 +14,7 @@ A Python Backdoor that should be able to run on all platforms and can handle mul
 
 ## How to use
 The server uses a group system to control the clients. You can address them with their indices(0, 1, ...) or with the groups, in which they are. When they connect all clients are automatically in the "all" group. So for example you can list all connected clients with "l all". You also can address multible groups or indices at once for example "l 1 2 3" but if ou select one client two times it will count as once: "l all 1".
-In some commands I had to split the attributes with " @ " because I wanted to be able to send spaces for example: "c echo test @ all" here I couldnt make out the point where the second argument starts so i nedd the " @ ".
+In some commands I had to split the attributes with " @ " because I wanted to be able to send spaces for example: "c echo test @ all" here I couldn't make out the point where the second argument starts so i needed the " @ ".
 
 * "h" - show command list
 * "o [option*] [value]" - set option; option can be "cmd_timeout"; value is timeout in seconds
