@@ -11,6 +11,7 @@ A Python Backdoor that should be able to run on all platforms and can handle mul
 ## Upcoming Features
 * Keylogger
 * Webcam access
+* Download folders
 
 ## How to use
 The server uses a group system to control the clients. You can address them with their indices(0, 1, ...) or with the groups, in which they are. When they connect all clients are automatically in the "all" group. So for example you can list all connected clients with "l all". You also can address multible groups or indices at once for example "l 1 2 3" but if ou select one client two times it will count as once: "l all 1".
