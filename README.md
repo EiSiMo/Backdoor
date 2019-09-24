@@ -23,7 +23,7 @@ In some commands I had to split the attributes with " @ " because I wanted to be
 * "l [clients]" - print a table of the clients
 * "t [tag] @ [clients]" - tag clients(tags can be seen when you list clients. They are just to keep better track)
 * "r [clients]" - remove clients
-* "g [mode] [clients] @ [group name]" - edit group; mode can be "add" or "rm"
+* "g [mode] [clients] @ [group names]" - edit groups; mode can be "add" or "rm"
 * "c [command] @ [clients]" - remotely execute command
 * "d [path to open] @ [path to save] @ [clients]" - download a file from target
 * "u [path to open] @ [path to save] @ [clients]" - upload a file to target
