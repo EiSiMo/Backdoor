@@ -87,8 +87,11 @@ class Connection:
         PORT = 10009
 
         if len(sys.argv) == 3:
-            HOST = str(sys.argv[1])
-            PORT = int(sys.argv[2])
+            try:
+                HOST = str(sys.argv[1])
+                PORT = int(sys.argv[2])
+            except ValueError:
+                print("[-] InvalidCommandlineArguments")
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
