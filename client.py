@@ -53,8 +53,8 @@ class Client:
             header = "[-] PermissionError"
             self.connection.send(header.encode(self.connection.CODEC), self.connection.sock)
         else:
-            header = str(len(data))
-            self.connection.send(header.encode(self.connection.CODEC), self.connection.sock)
+            header = str(len(data)).encode(self.connection.CODEC)
+            self.connection.send(header, self.connection.sock)
             self.connection.sock.send(data)
 
     def upload_file(self, path):
