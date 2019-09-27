@@ -11,7 +11,6 @@ A Python Backdoor that should be able to run on all platforms and can handle mul
 ## Upcoming Features
 * Keylogger
 * Webcam access
-* Download folders
 * Ipv6 support
 
 ## How to use
