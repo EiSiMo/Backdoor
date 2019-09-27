@@ -27,7 +27,7 @@ In some commands I had to split the attributes with " @ " because I wanted to be
 * "c [command] @ [clients]" - remotely execute command
 * "d [path to open] @ [path to save] @ [clients]" - download a file from target
 * "u [path to open] @ [path to save] @ [clients]" - upload a file to target
-* "s [monitor] @ [path_to_save] @ [clients]" - capture screenshot; monitor can be -1 for all monitors or 0, 1, 2, ... for one specific
+* "s [monitor] [path_to_save] @ [clients]" - capture screenshot; monitor can be -1 for all monitors or 0, 1, 2, ... for one specific
 * "x" - exit server
 
 ## Required modules

