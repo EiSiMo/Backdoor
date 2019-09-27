@@ -19,15 +19,20 @@ The server uses a group system to control the clients. You can address them with
 In some commands I had to split the attributes with " @ " because I wanted to be able to send spaces for example: "c echo test @ all" here I couldn't make out the point where the second argument starts so i needed the " @ ".
 
 * "h" - show command list
-* "o [option] [value]" - set option; option can be "cmd_timeout"; value is timeout in seconds
+* "o [option] [value]" - set option; option can be:
+    - "cmd_timeout", value is timeout in seconds
+    - "zip_compression", value is compression level from 0 to 9
 * "l [clients]" - print a table of the clients
 * "t [tag] @ [clients]" - tag clients(tags can be seen when you list clients. They are just to keep better track)
 * "r [clients]" - remove clients
-* "g [mode] [clients] @ [group names]" - edit groups; mode can be "add" or "rm"
+* "g [mode] [clients] @ [group names]" - edit groups; mode can be:
+    - "add" - add client to group 
+    - "rm" - remove client from group
 * "c [command] @ [clients]" - remotely execute command
 * "d [path to open] @ [path to save] @ [clients]" - download a file from target
 * "u [path to open] @ [path to save] @ [clients]" - upload a file to target
 * "s [monitor] [path_to_save] @ [clients]" - capture screenshot; monitor can be -1 for all monitors or 0, 1, 2, ... for one specific
+* "z [path to open] @ [path to save] @ [clients]" - compress folder or file to .zip
 * "x" - exit server
 
 ## Required modules
