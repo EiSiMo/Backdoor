@@ -80,19 +80,21 @@ class Client:
         self.connection.send(error.encode(self.connection.CODEC), self.connection.sock)
 
     def zip_file_or_folder(self, compression_level, path_to_open, path_to_save):
-        print("comp_lvl", compression_level)
-        print("open", path_to_open)
-        print("save", path_to_save)
         error = "no error"
-        zip_file = zipfile.ZipFile(path_to_save, 'w', zipfile.ZIP_DEFLATED, compresslevel=int(compression_level))
-        if os.path.isdir(path_to_open):
-            relative_path = os.path.dirname(path_to_open)
-            for root, dirs, files in os.walk(path_to_open):
-                for file in files:
-                    zip_file.write(os.path.join(root, file), os.path.join(root, file).replace(relative_path, '', 1))
-        else:
-            zip_file.write(path_to_open, os.path.basename(path_to_open))
-        zip_file.close()
+        try:
+            zip_file = zipfile.ZipFile(path_to_save, 'w', zipfile.ZIP_DEFLATED, compresslevel=int(compression_level))
+            if os.path.isdir(path_to_open):
+                relative_path = os.path.dirname(path_to_open)
+                for root, dirs, files in os.walk(path_to_open):
+                    for file in files:
+                        zip_file.write(os.path.join(root, file), os.path.join(root, file).replace(relative_path, '', 1))
+            else:
+                zip_file.write(path_to_open, os.path.basename(path_to_open))
+            zip_file.close()
+        except PermissionError:
+            error = "[-] PermissionError"
+        except FileNotFoundError:
+            error = "[-] FileNotFoundError"
         self.connection.send(error.encode(self.connection.CODEC), self.connection.sock)
 
 
