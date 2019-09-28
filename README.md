@@ -10,9 +10,6 @@ This is my first project on github so feel free to give tips.
 * Zip folders or files
 * Capturing webcam pictures
 * Capturing screenshots
-## Upcoming Features
-* Keylogger
-* Ipv6 support
 
 ## How to use
 The server uses a group system to control the clients. You can address them with their indices(0, 1, 2, ...) or with the
