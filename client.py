@@ -65,7 +65,7 @@ class Client:
             self.connection.sock.send(data)
 
     def upload_file(self, path):
-        data = base64.b64decode(self.connection.recv(self.connection.sock))
+        data = self.connection.recv(self.connection.sock)
         with open(path, "wb") as file:
             file.write(data)
 
