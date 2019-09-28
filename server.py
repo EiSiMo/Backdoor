@@ -148,7 +148,7 @@ class Server:
                 self.connection.send(data, connection)
                 print(self.connection.recv(connection).decode(self.connection.CODEC))
             except socket.error as error:
-                self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_id_by_connection(connection)) + "\n")
+                self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)) + "\n")
 
     def download_file(self, path_to_open, path_to_save, connections):
         for connection in connections:
@@ -168,7 +168,7 @@ class Server:
                     with open(path_to_save, "wb") as file:
                         file.write(data)
             except socket.error as error:
-                self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_id_by_connection(connection)))
+                self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
             print()
 
     def upload_file(self, path_to_open, path_to_save, connections):
@@ -190,7 +190,7 @@ class Server:
                         len_data_current = len_data_total - len(data)
                         self.update_line("\r[*] " + str(int(len_data_current / (len_data_total / 100))) + "% complete")
                 except socket.error as error:
-                    self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_id_by_connection(connection)))
+                    self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
                 print()
 
     def make_screenshot(self, monitor, path_to_save, connections):
@@ -202,7 +202,7 @@ class Server:
                 if response.startswith("[-]"):
                     print(response)
             except socket.error as error:
-                print("[-] SocketError: " + str(error) + ": " + str(self.get_id_by_connection(connection)))
+                print("[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
 
     def zip_file_or_folder(self, path_to_open, path_to_save, connections):
         for connection in connections:
@@ -212,7 +212,7 @@ class Server:
                 if response.startswith("[-]"):
                     print(response)
             except socket.error as error:
-                print("[-] SocketError: " + str(error) + ": " + str(self.get_id_by_connection(connection)))
+                print("[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
 
     def capture_camera_picture(self, path_to_save, connections):
         for connection in connections:
@@ -222,7 +222,7 @@ class Server:
                 if response.startswith("[-]"):
                     print(response)
             except socket.error as error:
-                print("[-] SocketError: " + str(error) + ": " + str(self.get_id_by_connection(connection)))
+                print("[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
 
     def get_conn_fgoi(self, objects):  # get connections from groups or indexs
         connections = list()
@@ -236,9 +236,9 @@ class Server:
                         connections.append(self.connection.connections[int(index)][0])
         return connections
 
-    def get_id_by_connection(self, connection):
-        for index, (c, _, _, _, _) in enumerate(self.connection.connections):
-            if connection == c:
+    def get_index_by_connection(self, searched_connection):
+        for index, (connection, _, _, _, _) in enumerate(self.connection.connections):
+            if searched_connection == connection:
                 return index
 
     def update_line(self, text):
