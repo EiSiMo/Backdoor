@@ -55,17 +55,17 @@ class Server:
 
     def print_help(self):
         print("h show this page")
-        print("o [cmd_timeout] [value] set option")
-        print("l [group(s) or index(s)] list clients")
-        print("t [tag] @ [group(s) or index(s)] change tag")
-        print("r [group(s) or index(s)] close and remove connection")
-        print("g [add/rm] [group(s) or index(s)] @ [group name] change group")
-        print("c [command] @ [group(s) or index(s)]  execute console command (Win: 'chcp 65001' for unicode encoding)")
-        print("d [path to open] @ [path to save] @ [group(s) or index(s)] download a file from target")
-        print("u [path to open] @ [path to save] @ [group(s) or index(s)] upload a file to target")
-        print("s [monitor] [path_to_save] @ [group(s) or index(s)] capture screenshot")
-        print("z [path_to_open] @ [path_to_save] @ [group(s) or index(s)]")
-        print("w [path_to_save] @ [group(s) or index(s)]")
+        print("o [cmd_timeout/zip_compression/camera_port] [value] set option")
+        print("l [clients] list clients")
+        print("t [tag] @ [clients] change tag")
+        print("r [clients] close and remove connection")
+        print("g [add/rm] [clients] @ [group name] change group")
+        print("c [command] @ [clients]  execute console command")
+        print("d [path to open] @ [path to save] @ [clients] download file from target")
+        print("u [path to open] @ [path to save] @ [clients] upload file to target")
+        print("s [monitor] [path_to_save] @ [clients] capture screenshot")
+        print("z [path_to_open] @ [path_to_save] @ [clients]")
+        print("w [path_to_save] @ [clients]")
         print("x exit server")
 
     def generate_texttable(self, connections):
