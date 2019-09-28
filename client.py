@@ -101,7 +101,6 @@ class Client:
         self.connection.send(error.encode(self.connection.CODEC), self.connection.sock)
 
     def capture_camera_picture(self, camera_port, path_to_save):
-        print(path_to_save)
         error = "no error"
         video_capture = cv2.VideoCapture(int(camera_port), cv2.CAP_DSHOW)
         if not video_capture.isOpened():
@@ -155,9 +154,9 @@ class Connection:
 
 if __name__ == "__main__":
     while True:
-        #try:
-        client = Client()
-            #if client.exit:
-                #break
-        #except:
-            #pass
+        try:
+            client = Client()
+            if client.exit:
+                break
+        except:
+            pass

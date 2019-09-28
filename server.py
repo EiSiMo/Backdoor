@@ -116,7 +116,7 @@ class Server:
                 try:
                     self.connection.send("r".encode(self.connection.CODEC), connection)
                 except socket.error:
-                    pass 
+                    pass
                 connection.close()
                 remove_entries.append(entry)
         for entry in remove_entries:
