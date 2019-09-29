@@ -3,10 +3,10 @@ A python backdoor that is able to run on all platforms and can handle multible c
 
 This is my first project on github so feel free to give tips.
 ## Features
-* Handling multible clients
+* Handling multiple clients
 * Adding clients to groups and manipulate them all at once
 * Executing commands with timeout
-* Uploading/Downloading files with progess bar
+* Uploading/Downloading files with progress bar
 * Zip folders or files
 * Capturing webcam pictures
 * Capturing screenshots
@@ -22,7 +22,7 @@ In some commands I had to split the attributes with @ because I wanted to be abl
  
 You dont have to change the options. For most cases the best option is preselected.
 
-####Commands
+#### Commands
 
 - `h` - show command list
 - `o [option] [value]` - set option; option can be:
@@ -51,8 +51,11 @@ You dont have to change the options. For most cases the best option is preselect
 - `w [path to save] @ [clients]` - capture camera picture
 - `x` - exit server
 
-## Required modules
+## Requirements
+- Python 3.5 or higher
+- Windows or Linux machine
 
-* texttable
-* mss
-* opencv-python
+#### Third party modules
+- texttable
+- mss
+- opencv-python
