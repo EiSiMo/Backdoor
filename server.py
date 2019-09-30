@@ -194,7 +194,7 @@ class Server:
                 except socket.error as error:
                     self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
                 except KeyboardInterrupt:
-                    self.update_line("\r[-] DownloadCanceled")
+                    self.update_line("\r[-] UploadCanceled")
                 print()
 
     def make_screenshot(self, monitor, path_to_save, connections):
