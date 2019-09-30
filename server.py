@@ -169,6 +169,8 @@ class Server:
                         file.write(data)
             except socket.error as error:
                 self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
+            except KeyboardInterrupt:
+                self.update_line("\r[-] DownloadCanceled")
             print()
 
     def upload_file(self, path_to_open, path_to_save, connections):
@@ -191,6 +193,8 @@ class Server:
                         self.update_line("\r[*] " + str(int(len_data_current / (len_data_total / 100))) + "% complete")
                 except socket.error as error:
                     self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
+                except KeyboardInterrupt:
+                    self.update_line("\r[-] DownloadCanceled")
                 print()
 
     def make_screenshot(self, monitor, path_to_save, connections):
