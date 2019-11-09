@@ -64,8 +64,8 @@ class Server:
         print("d [path to open] @ [path to save] @ [clients] download file from target")
         print("u [path to open] @ [path to save] @ [clients] upload file to target")
         print("s [monitor] [path_to_save] @ [clients] capture screenshot")
-        print("z [path_to_open] @ [path_to_save] @ [clients]")
-        print("w [path_to_save] @ [clients]")
+        print("z [path_to_open] @ [path_to_save] @ [clients] zip file or folder")
+        print("w [path_to_save] @ [clients] capture camera picture")
         print("x exit server")
 
     def generate_texttable(self, connections):
