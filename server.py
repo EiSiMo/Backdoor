@@ -254,7 +254,7 @@ class Connection:
         self.connections = list()
 
         HOST = "127.0.0.1"
-        PORT = 10009
+        PORT = 10000
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

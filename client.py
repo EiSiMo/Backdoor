@@ -11,7 +11,6 @@ import zipfile
 import mss
 import cv2
 
-
 class Client:
     def __init__(self):
         self.connection = Connection()
@@ -123,7 +122,7 @@ class Connection:
         self.PACKET_SIZE = 1024
 
         HOST = "127.0.0.1"
-        PORT = 10009
+        PORT = 10000
 
         if len(sys.argv) == 3:
             try:
