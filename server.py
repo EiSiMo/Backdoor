@@ -85,7 +85,7 @@ class Server:
         table = texttable.Texttable()
         table.set_deco(texttable.Texttable.HEADER)
         rows = [["INDEX", "ADDRESS", "PORT", "TAG", "GROUPS"]]
-        for index, session in enumerate(self.connection.connections):
+        for index, session in enumerate(self.connection.sessions):
             if session["connection"] in connections:
                 rows.append([index, session["address"], session["port"], session["tag"], ", ".join(session["groups"])])
         table.add_rows(rows)
@@ -118,38 +118,38 @@ class Server:
             print("[-] UnknownOption")
 
     def change_tag(self, tag, connections):
-        for index, session in enumerate(self.connection.connections):
+        for index, session in enumerate(self.connection.sessions):
             if session["connection"] in connections:
-                self.connection.connections[index]["tag"] = tag
+                self.connection.sessions[index]["tag"] = tag
 
     def remove_connection(self, connections):
         request = {"cmd": "r",
                    "timeout": self.timeout}
-        for session in list(self.connection.connections):
+        for session in list(self.connection.sessions):
             if session["connection"] in connections:
                 try:
                     self.connection.send(self.enc_request(request), session["connection"])
                 except socket.error:
                     pass
                 connection.close()
-                self.connection.connections.remove(entry)
+                self.connection.sessions.remove(entry)
 
     def edit_group(self, mode, connections, group_names):
         if mode == "add":
-            for index, session in enumerate(self.connection.connections):
+            for index, session in enumerate(self.connection.sessions):
                 if session["connection"] in connections:
                     for name in group_names:
-                        if name not in self.connection.connections[index]["groups"]:
-                            self.connection.connections[index]["groups"].append(name)
+                        if name not in self.connection.sessions[index]["groups"]:
+                            self.connection.sessions[index]["groups"].append(name)
                         else:
                             print("[-] TargetAlreadyInGroup")
 
         elif mode == "rm":
-            for index, session in enumerate(self.connection.connections):
+            for index, session in enumerate(self.connection.sessions):
                 if session["connection"] in connections:
                     for name in group_names:
                         try:
-                            self.connection.connections[index]["groups"].remove(name)
+                            self.connection.sessions[index]["groups"].remove(name)
                         except ValueError:
                             print("[-] TargetNotInGroup")
 
@@ -272,7 +272,7 @@ class Server:
     def get_conn_fgoi(self, objects):  # get connections from groups or indexs
         connections = list()
         for goi in objects:
-            for index, session in enumerate(self.connection.connections):
+            for index, session in enumerate(self.connection.sessions):
                 if session["connection"] not in connections:
                     if goi in session["groups"]:
                         connections.append(session["connection"])
@@ -281,7 +281,7 @@ class Server:
         return connections
 
     def get_index_by_connection(self, searched_connection):
-        for index, session in enumerate(self.connection.connections):
+        for index, session in enumerate(self.connection.sessions):
             if searched_connection == session["connection"]:
                 return index
 
@@ -301,7 +301,7 @@ class Connection:
         self.CODEC = "utf8"
         self.PACKET_SIZE = 1024
         self.END_MARKER = "-".encode(self.CODEC)
-        self.connections = list()
+        self.sessions = list()
 
         HOST = "127.0.0.1"
         PORT = 10000
@@ -323,7 +323,7 @@ class Connection:
                        "port": port,
                        "tag": "no tag",
                        "groups": ["all"]}
-            self.connections.append(session)
+            self.sessions.append(session)
 
     def send(self, data, connection):
         data = base64.b64encode(data) + self.END_MARKER

