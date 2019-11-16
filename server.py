@@ -131,8 +131,8 @@ class Server:
                     self.connection.send(self.enc_request(request), session["connection"])
                 except socket.error:
                     pass
-                connection.close()
-                self.connection.sessions.remove(entry)
+                session["connection"].close()
+                self.connection.sessions.remove(session)
 
     def edit_group(self, mode, connections, group_names):
         if mode == "add":
@@ -162,7 +162,7 @@ class Server:
             try:
                 self.connection.send(self.enc_request(request), connection)
                 response = self.dec_response(self.connection.recv(connection))
-                print(response["out"] + response["error"])
+                print(response["data"] + response["error"])
             except socket.error as error:
                 self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)) + "\n")
 
@@ -184,11 +184,11 @@ class Server:
         for connection in connections:
             try:
                 self.connection.send(self.enc_request(request), connection)
-                header = self.connection.recv(connection).decode(self.connection.CODEC)
-                if header.startswith("[-]"):
-                    print(header)
+                response = self.dec_response(self.connection.recv(connection))
+                if response["error"]:
+                    print(response["error"])
                 else:
-                    len_data_total = int(header)
+                    len_data_total = int(response["length"])
                     data = bytes()
                     while not data.endswith(self.connection.END_MARKER):
                         data += connection.recv(self.connection.PACKET_SIZE)
@@ -219,10 +219,12 @@ class Server:
                     len_data_total = len(data)
                     self.connection.send(self.enc_request(request), connection)
                     while data:
-                        connection.send(data[:1024])
-                        data = data[1024:]
+                        connection.send(data[:self.connection.PACKET_SIZE])
+                        data = data[self.connection.PACKET_SIZE:]
                         len_data_current = len_data_total - len(data)
                         self.update_line("\r[*] " + str(int(len_data_current / (len_data_total / 100))) + "% complete")
+                    response = self.dec_response(self.connection.recv(connection))
+                    print(response["error"])
                 except socket.error as error:
                     self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
                 except KeyboardInterrupt:
