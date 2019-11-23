@@ -11,7 +11,7 @@ import texttable
 
 class Server:
     def __init__(self):
-        self.timeout = 3
+        self.timeout = 30
         self.zip_compression_level = 0
         self.camera_port = 0
         self.connection = Connection()
@@ -306,7 +306,7 @@ class Connection:
         self.sessions = list()
 
         HOST = "127.0.0.1"
-        PORT = 10000
+        PORT = 10001
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

