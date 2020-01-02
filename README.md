@@ -26,7 +26,7 @@ You dont have to change the options. For most cases the best option is preselect
 
 - `h` - show command list
 - `o [option] [value]` - set option; option can be:
-    - `timeout`
+    - `cmd_timeout`
         - value is timeout in seconds
         - standard value: 30
     - `zip_compression`
@@ -41,9 +41,6 @@ You dont have to change the options. For most cases the best option is preselect
 - `g [mode] [clients] @ [group name(s)]` - edit groups; mode can be:
     - `add` - add client to group 
     - `rm` - remove client from group
-- `f [mode] [path] @ [clients]` - edit current working directory; path is only needed if mode is set; mode can be:
-    - `get` - get current working directory
-    - `set` - set current working directory to path
 - `c [command] @ [clients]` - remotely execute command
 - `d [path to open] @ [path to save] @ [clients]` - download a file from target
 - `u [path to open] @ [path to save] @ [clients]` - upload a file to target
@@ -55,7 +52,7 @@ You dont have to change the options. For most cases the best option is preselect
 - `x` - exit server
 
 ## Requirements
-- Python 3.x
+- Python 3.5 or higher
 - Windows or Linux machine
 
 #### Third party modules

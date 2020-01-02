@@ -158,7 +158,6 @@ class Server:
                    "mode": mode,
                    "path": path,
                    "timeout": self.timeout}
-<<<<<<< HEAD
         for connection in connections:
             try:
                 self.connection.send(self.enc_request(request), connection)
@@ -171,28 +170,11 @@ class Server:
         request = {"cmd": "c",
                    "exe": exe,
                    "timeout": self.timeout}
-=======
->>>>>>> 72693f10253976fdf0d943334d45ed54c4cc40cb
         for connection in connections:
             try:
                 self.connection.send(self.enc_request(request), connection)
                 response = self.dec_response(self.connection.recv(connection))
                 print(response["data"] + response["error"])
-<<<<<<< HEAD
-=======
-            except socket.error as error:
-                self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)) + "\n")
-
-    def execute_command(self, exe, connections):
-        request = {"cmd": "c",
-                   "exe": exe,
-                   "timeout": self.timeout}
-        for connection in connections:
-            try:
-                self.connection.send(self.enc_request(request), connection)
-                response = self.dec_response(self.connection.recv(connection))
-                print(response["data"] + response["error"])
->>>>>>> 72693f10253976fdf0d943334d45ed54c4cc40cb
             except socket.error as error:
                 print("SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
 
