@@ -54,8 +54,8 @@ You dont have to change the options. For most cases the best option is preselect
 - `x` - exit server
 
 ## Requirements
-- Python 3.5 or higher
-- Windows or Linux machine
+- Python 3.6 or higher
+- Windows or Linux system
 
 #### Third party modules
 - texttable
