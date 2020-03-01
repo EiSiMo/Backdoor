@@ -1,0 +1,3 @@
+mss
+texttable
+opencv-python
