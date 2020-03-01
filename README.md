@@ -5,7 +5,7 @@ This is my first project on github so feel free to give tips.
 ## Features
 * Handling multiple clients
 * Adding clients to groups and manipulate them all at once
-* Fully encrypted communication (NO FILES YET!) GENERATE NEW KEY BEFORE USING!
+* Fully encrypted communication, GENERATE NEW KEY BEFORE USING!
 * Executing commands with timeout
 * Uploading/Downloading files with progress bar
 * Zip folders or files

