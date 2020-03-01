@@ -60,4 +60,6 @@ You dont have to change the options. For most cases the best option is preselect
 #### Third party modules
 - texttable
 - mss
-- opencv-python
+- cv2
+
+install them with `pip install -r requirements.txt`
