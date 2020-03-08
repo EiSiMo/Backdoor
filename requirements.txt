@@ -1,3 +1,5 @@
 mss
 texttable
 opencv-python
+cryptography
+pynput

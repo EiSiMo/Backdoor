@@ -1,65 +1,51 @@
 # PythonBackdoor
-A python backdoor that is able to run on all platforms and can handle multible clients.
+A python backdoor that is able to run on Windows and Linux.
 
 This is my first project on github so feel free to give tips.
-## Features
-* Handling multiple clients
-* Adding clients to groups and manipulate them all at once
-* Fully encrypted communication, GENERATE NEW KEY BEFORE USING!
-* Executing commands with timeout
-* Uploading/Downloading files with progress bar
-* Zip folders or files
-* Capturing webcam pictures
-* Capturing screenshots
-* Getting and setting current working directory
+
 
 ## How to use
+#### Group system
 The server uses a group system to control the clients. You can address them with their indices(0, 1, 2, ...) or with the
 groups, in which they are. When they connect all clients are automatically in the 'all' group. So for example you can
-list all connected clients with `l all`. You also can address multiple groups or indices at once for example `l 1 2 3`.
-If ou select one client two times it will count as one for example: `l all 1`.
+list all connected clients with `list -s all`. You also can address multiple groups or indices at once for example
+`list -s 1 2 3`. If you select one client two times it will be addressed only once: `list -s all 1`.
 
-In some commands I had to split the attributes with @ because I wanted to be able to send spaces for example:
-`c echo test @ all` here I could not make out the point where the second argument starts so I needed the @.
- 
-You dont have to change the options. For most cases the best option is preselected.
+#### Encryption
+The backdoor uses AES encryption in GCM mode with a 256 bit key to encrypt the entire communication.
+When using the backdoor its important to change the key. To do so replace the key in server.py (line 187) and in
+client.py (line 156) with the output of generate_key.py.
 
 #### Commands
 
-- `h` - show command list
-- `o [option] [value]` - set option; option can be:
-    - `cmd_timeout`
-        - value is timeout in seconds
-        - standard value: 30
-    - `zip_compression`
-        - value is compression level from 0 to 9
-        - standard value: 0
-    - `camera_port`
-        - value is device port: positive int
-        - standard value: 0
-- `l [clients]` - print a table of the clients
-- `t [tag] @ [clients]`" - tag clients(tags can be seen when you list clients. They are just to keep better track)
-- `r [clients]` - remove clients
-- `g [mode] [clients] @ [group name(s)]` - edit groups; mode can be:
-    - `add` - add client to group 
-    - `rm` - remove client from group
-- `c [command] @ [clients]` - remotely execute command
-- `d [path to open] @ [path to save] @ [clients]` - download a file from target
-- `u [path to open] @ [path to save] @ [clients]` - upload a file to target
-- `s [monitor] [path_to_save] @ [clients]` - capture screenshot; monitor can be:
-    - -1 for all monitors
-    - positive int for one specific
-- `z [path to open] @ [path to save] @ [clients]` - compress folder or file to zipfile
-- `w [path to save] @ [clients]` - capture camera picture
-- `x` - exit server
+- `cam` - Capture camera image
+- `close` - Close and remove session
+- `down` - Download file from client
+- `edit` - Run a text editor and optionally open a file with it
+- `exe` - Remote execute terminal command
+- `exit` - Exit server and close socket (not closing sessions)
+- `group` - Edit sessions groups memberships
+- `help` - List available commands or provide detailed help for a specific command
+- `history` - View, run, edit, save, or clear previously entered commands
+- `list` - List connected sessions
+- `logger` - Start/Stop keylogger
+- `opt` - Edit option value
+- `screen` - Capture screen image
+- `set` - Set a settable parameter or show current settings of parameters
+- `shell` - Execute a command as if at the OS prompt
+- `tag` - Edit sessions tag
+- `up` - Upload file to client
+- `zip` - Compress to zip archive
 
 ## Requirements
 - Python 3.6 or higher
-- Windows or Linux system
+- Windows or Linux OS
 
 #### Third party modules
 - texttable
 - mss
 - cv2
+- cryptography
+- pynput
 
 install them with `pip install -r requirements.txt`
