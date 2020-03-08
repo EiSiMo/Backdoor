@@ -60,8 +60,8 @@ class Client:
     def execute_command(self, response, command):
         try:
             process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-            response["data"] = process.stdout.read()
-            response["error"] = process.stderr.read()
+            response["data"] = process.stdout.read().rstrip()
+            response["error"] = process.stderr.read().rstrip()
         except UnicodeDecodeError:
             response["error"] = "UnicodeDecodeError"
 
@@ -177,10 +177,12 @@ class Connection:
     def send(self, data: dict):
         data = self.encrypt(json.dumps(data.copy()).encode(self.CODEC))
         self.sock.sendall(str(len(data)).encode("utf8"))
+        self.sock.recv(self.PACKET_SIZE)
         self.sock.sendall(data)
 
     def recv(self) -> dict:
         header = int(self.sock.recv(self.PACKET_SIZE).decode("utf8"))
+        self.sock.send("ACK".encode("utf8"))
         data = bytearray()
         for _ in range(math.ceil(header / self.PACKET_SIZE)):
             data.extend(self.sock.recv(self.PACKET_SIZE))

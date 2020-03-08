@@ -3,7 +3,6 @@ A python backdoor that is able to run on Windows and Linux.
 
 This is my first project on github so feel free to give tips.
 
-
 ## How to use
 #### Group system
 The server uses a group system to control the clients. You can address them with their indices(0, 1, 2, ...) or with the
@@ -42,10 +41,11 @@ client.py (line 156) with the output of generate_key.py.
 - Windows or Linux OS
 
 #### Third party modules
-- texttable
-- mss
-- cv2
+- cmd2
 - cryptography
+- cv2
+- mss
 - pynput
+- texttable
 
 install them with `pip install -r requirements.txt`
