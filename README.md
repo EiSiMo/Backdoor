@@ -1,4 +1,4 @@
-# PythonBackdoor
+# Python Backdoor
 A python backdoor that is able to run on Windows and Linux.
 
 This is my first project on github so feel free to give tips.
@@ -12,11 +12,11 @@ list all connected clients with `list -s all`. You also can address multiple gro
 
 #### Encryption
 The backdoor uses AES encryption in GCM mode with a 256 bit key to encrypt the entire communication.
-When using the backdoor its important to change the key. To do so replace the key in server.py (line 183) and in
-client.py (line 158) with the output of generate_key.py.
+When using the backdoor its important to change the key. To do so replace the key in server.py (line 204) and in
+client.py (line 158) with the output of generate_key.py (both have to be the same).
 
 #### Commands
-
+- `block` - Block a client by IP
 - `cam` - Capture camera image
 - `close` - Close and remove session
 - `down` - Download file from client
@@ -37,7 +37,7 @@ client.py (line 158) with the output of generate_key.py.
 
 ## Requirements
 - Python 3.6 or higher
-- Windows or Linux OS
+- Windows or Linux OS (not tested on mac)
 
 #### Third party modules
 - cmd2

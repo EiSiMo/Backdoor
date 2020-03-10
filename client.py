@@ -184,7 +184,7 @@ class Connection:
 
     def recv(self) -> dict:
         header = int(self.sock.recv(self.PACKET_SIZE).decode("utf8"))
-        self.sock.send("ACK".encode("utf8"))
+        self.sock.send("READY".encode("utf8"))
         data = bytearray()
         for _ in range(math.ceil(header / self.PACKET_SIZE)):
             data.extend(self.sock.recv(self.PACKET_SIZE))
