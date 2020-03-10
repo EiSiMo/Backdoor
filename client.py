@@ -74,6 +74,8 @@ class Client:
             response["error"] = "FileNotFoundError"
         except PermissionError:
             response["error"] = "PermissionError"
+        except MemoryError:
+            response["error"] = "MemoryError"
         self.connection.send(response)
 
     def upload_file(self, path, data):

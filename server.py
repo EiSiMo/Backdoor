@@ -17,8 +17,6 @@ import cmd2
 
 class Server:
     def __init__(self):
-        self.timeout = 30
-        self.zip_compression_level = 0
         self.user_interface = UserInterface(self)
         self.connection = Connection(self.user_interface)
 
@@ -35,22 +33,6 @@ class Server:
         table.add_rows(rows)
         self.user_interface.poutput(table.draw())
 
-    def set_option(self, option, value):
-        option = option.lower()
-        if option == "timeout":
-            try:
-                self.timeout = int(value)
-            except ValueError:
-                self.user_interface.perror("[-] InvalidTimeout")
-        elif option == "zip_compression":
-            try:
-                if int(value) not in range(10):
-                    self.user_interface.perror("[-] InvalidCompressionLevel")
-                else:
-                    self.zip_compression_level = int(value)
-            except ValueError:
-                self.user_interface.perror("[-] InvalidCompressionLevel")
-
     def edit_tag(self, tag, connections):
         for index, session in enumerate(self.connection.sessions):
             if session["connection"] in connections:
@@ -58,7 +40,7 @@ class Server:
 
     def close_session(self, connections):
         request = {"cmd": "r",
-                   "timeout": self.timeout}
+                   "timeout": self.user_interface.cmd_timeout}
         for session in list(self.connection.sessions):
             if session["connection"] in connections:
                 try:
@@ -84,10 +66,10 @@ class Server:
     def execute_command(self, exe, connections):
         request = {"cmd": "c",
                    "exe": exe,
-                   "timeout": self.timeout}
+                   "timeout": self.user_interface.cmd_timeout}
         for connection in connections:
             self.connection.send(request, connection)
-            valid, response = self.connection.recv(connection)
+            valid, response = self.connection.recv(connection, {"error": str, "data": str})
             if valid:
                 if response["error"]:
                     self.user_interface.perror(
@@ -100,7 +82,7 @@ class Server:
                    "open_path": path_to_open}
         for connection in connections:
             self.connection.send(request, connection)
-            valid, response = self.connection.recv(connection)
+            valid, response = self.connection.recv(connection, {"error": str, "data": str})
             if valid:
                 if response["error"]:
                     self.user_interface.perror(
@@ -108,7 +90,7 @@ class Server:
                 else:
                     try:
                         with open(path_to_save, "wb") as file:
-                            file.write(base64.b64decode(response['data']))
+                            file.write(base64.b64decode(response["data"]))
                     except PermissionError:
                         self.user_interface.perror("PermissionError")
 
@@ -123,10 +105,12 @@ class Server:
             self.user_interface.perror("FileNotFoundError")
         except PermissionError:
             self.user_interface.perror("PermissionError")
+        except MemoryError:
+            self.user_interface.perror("MemoryError")
         else:
             for connection in connections:
                 self.connection.send(request, connection)
-                valid, response = self.connection.recv(connection)
+                valid, response = self.connection.recv(connection, {"error": str})
                 if valid:
                     if response["error"]:
                         self.user_interface.perror(
@@ -136,10 +120,10 @@ class Server:
         request = {"cmd": "s",
                    "monitor": monitor,
                    "save_path": path_to_save,
-                   "timeout": self.timeout}
+                   "timeout": self.user_interface.cmd_timeout}
         for connection in connections:
             self.connection.send(request, connection)
-            valid, response = self.connection.recv(connection)
+            valid, response = self.connection.recv(connection, {"error": str})
             if valid:
                 if response["error"]:
                     self.user_interface.perror(
@@ -150,10 +134,10 @@ class Server:
                    "comp_lvl": compression_level,
                    "open_path": path_to_open,
                    "save_path": path_to_save,
-                   "timeout": self.timeout}
+                   "timeout": self.user_interface.cmd_timeout}
         for connection in connections:
             self.connection.send(request, connection)
-            valid, response = self.connection.recv(connection)
+            valid, response = self.connection.recv(connection, {"error": str})
             if valid:
                 if response["error"]:
                     self.user_interface.perror(
@@ -163,10 +147,10 @@ class Server:
         request = {"cmd": "w",
                    "cam_port": port,
                    "save_path": path_to_save,
-                   "timeout": self.timeout}
+                   "timeout": self.user_interface.cmd_timeout}
         for connection in connections:
             self.connection.send(request, connection)
-            valid, response = self.connection.recv(connection)
+            valid, response = self.connection.recv(connection, {"error": str})
             if valid:
                 if response["error"]:
                     self.user_interface.perror(
@@ -178,13 +162,13 @@ class Server:
                    "save_path": filename}
         for connection in connections:
             self.connection.send(request, connection)
-            valid, response = self.connection.recv(connection)
+            valid, response = self.connection.recv(connection, {"error": str, "data": str})
             if valid:
                 if response["error"]:
                     self.user_interface.perror(
                         f"Error from session {self.connection.get_index_by_connection(connection)}: {response['error']}")
                 elif response["data"]:
-                    self.user_interface.poutput(response['data'])
+                    self.user_interface.poutput(response["data"])
 
 
 class Connection:
@@ -202,7 +186,6 @@ class Connection:
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
         self.sock.bind((HOST, PORT))
         self.user_interface.pinfo("server running")
         self.accept_new_connections_process = threading.Thread(target=self.accept_new_connections, args=(self.sock,))
@@ -225,6 +208,7 @@ class Connection:
             try:
                 sock.listen()
                 connection, (address, port) = sock.accept()
+                self.user_interface.async_alert("[*] client connected")
             except OSError:  # error occurs when socket is closed
                 break
             else:
@@ -237,13 +221,14 @@ class Connection:
 
     # credit: https://stackoverflow.com/questions/1094841/reusable-library-to-get-human-readable-version-of-file-size
     def format_byte_length(self, num, suffix='B'):
-        for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
+        for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"]:
             if abs(num) < 1024.0:
                 return f"{num:3.1f} {unit}{suffix}"
             num /= 1024.0
         return f"{num:3.1f} Yi{suffix}"
 
-    def send(self, data: dict, connection, progress_print=True):
+    def send(self, data: dict, connection):
+        self.sock.settimeout(self.user_interface.sock_timeout)
         data = self.encrypt(json.dumps(data).encode(self.CODEC))
         len_data_total = len(data)
         total_packets = math.ceil(len_data_total / self.PACKET_SIZE)
@@ -252,33 +237,39 @@ class Connection:
         try:
             for packet_number in range(total_packets):
                 connection.sendall(data[packet_number*self.PACKET_SIZE:(packet_number + 1) * self.PACKET_SIZE])
-                if progress_print:
-                    sys.stdout.write(f"\r[*] sending {self.format_byte_length(len_data_total)} to {packet_number + 1 / (total_packets / 100)}% complete")
-                    sys.stdout.flush()
-            if progress_print:
+                sys.stdout.write(f"\r[*] sending {self.format_byte_length(len_data_total)} to {packet_number + 1 / (total_packets / 100)}% complete")
+                sys.stdout.flush()
                 print()
         except socket.error as error:
             self.user_interface.perror(f"SocketError from session {self.get_index_by_connection(connection)}: {error}")
 
-    def recv(self, connection, progress_print=True):
-        header = int(connection.recv(self.PACKET_SIZE).decode("utf8"))
-        connection.send("ACK".encode("utf8"))
+    def recv(self, connection, expected_dict):
+        connection.settimeout(self.user_interface.sock_timeout)
         data = bytearray()
         try:
+            header = int(connection.recv(self.PACKET_SIZE).decode("utf8"))
+            connection.send("ACK".encode("utf8"))
             for _ in range(math.ceil(header / self.PACKET_SIZE)):
                 data.extend(connection.recv(self.PACKET_SIZE))
-                if progress_print:
-                    sys.stdout.write(f"\r[*] receiving {self.format_byte_length(header)} to {round(len(data) / (header / 100), 1)}% complete")
-                    sys.stdout.flush()
-            if progress_print:
+                sys.stdout.write(f"\r[*] receiving {self.format_byte_length(header)} to {round(len(data) / (header / 100), 1)}% complete")
+                sys.stdout.flush()
                 print()
-            return True, json.loads(self.decrypt(bytes(data)).decode(self.CODEC))
+            received_dict = json.loads(self.decrypt(bytes(data)).decode(self.CODEC))
+            # check if all expected keys are existing and if all values are of the same type
+            for expected_key, expected_type in zip(expected_dict.keys(), expected_dict.values()):
+                if expected_key not in received_dict or type(received_dict[expected_key]) == expected_type:
+                    return False, None
+            return True, received_json
         except socket.error as error:
             self.user_interface.perror(f"SocketError from session {self.get_index_by_connection(connection)}: {error}")
         except InvalidTag:
             self.user_interface.perror(f"InvalidTag from session {self.get_index_by_connection(connection)}")
         except json.decoder.JSONDecodeError:
             self.user_interface.perror(f"JSONDecodeError from session {self.get_index_by_connection(connection)}")
+        except UnicodeDecodeError:
+            self.user_interface.perror(f"UnicodeDecodeError from session {self.get_index_by_connection(connection)}")
+        except ValueError:
+            self.user_interface.perror(f"ValueError from session {self.get_index_by_connection(connection)}")
         return False, None
 
     def encrypt(self, data):
@@ -357,6 +348,15 @@ class UserInterface(cmd2.Cmd):
         self.server = server
         self.prompt = "[+] "
 
+        # setting options
+        self.cmd_timeout = 30
+        self.zip_comp = 1
+        self.sock_timeout = 10
+        # adding some settings
+        self.add_settable(cmd2.Settable("cmd_timeout", int, "clientside timeout before returning from a command",
+                                        choices=range(0, 3600)))
+        self.add_settable(cmd2.Settable("zip_comp", int, "compression level when creating zip file", choices=range(0, 9)))
+        self.add_settable(cmd2.Settable("sock_timeout", int, "serverside timeout for receiving and sending data", choices=range(0, 3600)))
         # delete some builtins
         del cmd2.Cmd.do_py
         del cmd2.Cmd.do_run_pyscript
