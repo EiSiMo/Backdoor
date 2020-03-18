@@ -48,3 +48,10 @@ client.py (line 158) with the output of generate_key.py (both have to be the sam
 - texttable
 
 install them with `pip install -r requirements.txt`
+
+## TODO
+- get clipboard content
+- get browser cookies
+- DOS attack
+- sniff wifi
+- kill process
