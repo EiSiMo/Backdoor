@@ -6,6 +6,10 @@ A python backdoor that is able to run on Windows and Linux.
 This is my first project on github so feel free to give tips.
 
 ## How to use
+#### Client versions
+The main version of the client is the Python version but I am currently working on a different one written in Rust
+because the Python client is very big if compiled (around 60 MiB). THE RUST VERSION IS VERY UNSTABLE AND YOU SHOULD NOT USE IT!
+
 #### Group system
 The server uses a group system to control the clients. You can address them with their indices(0, 1, 2, ...) or with the
 groups, in which they are. When they connect all clients are automatically in the 'all' group. So for example you can
