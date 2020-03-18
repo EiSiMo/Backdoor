@@ -8,7 +8,7 @@ This is my first project on github so feel free to give tips.
 ## How to use
 #### Client versions
 The main version of the client is the Python version but I am currently working on a different one written in Rust
-because the Python client is very big if compiled (around 60 MiB). THE RUST VERSION IS VERY UNSTABLE AND YOU SHOULD NOT USE IT!
+because the Python client is very big if compiled (around 60 MiB). The goal is to implement the same functions on both versions so they are compatible with just one server. THE RUST VERSION IS VERY UNSTABLE AND YOU SHOULD NOT USE IT!
 
 #### Group system
 The server uses a group system to control the clients. You can address them with their indices(0, 1, 2, ...) or with the
