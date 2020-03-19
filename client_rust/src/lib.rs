@@ -1,1 +1,2 @@
-pub mod comm;
+pub mod communication;
+pub mod commands;

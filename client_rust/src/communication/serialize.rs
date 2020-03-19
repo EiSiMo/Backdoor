@@ -1,0 +1,13 @@
+use json;
+use std::error::Error;
+use std::str::from_utf8;
+
+pub fn bytes2json(data: &Vec<u8>) -> Result<json::JsonValue, Box<dyn Error>> {
+    let data_decoded: &str = from_utf8(&data)?;
+    let data_json: json::JsonValue = json::parse(&data_decoded)?;
+    Ok(data_json)
+}
+
+//pub fn json2bytes(data: json::JsonValue) -> Result<Vec<u8>, Box<dyn Error>> {
+//
+//}
