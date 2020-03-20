@@ -5,7 +5,7 @@ use std::thread;
 use json;
 use crate::communication::constants;
 use crate::communication::crypt;
-use crate::communication::serialize;
+use crate::communication::convert;
 use std::str::from_utf8;
 
 pub fn establish() -> TcpStream {
@@ -42,7 +42,7 @@ pub fn recv(stream: &mut TcpStream) -> Result<json::JsonValue, Box<dyn Error>> {
     let mut data: Vec<u8> = vec![0 as u8; data_length];
     stream.read_exact(&mut data)?;
     let data_decrypted = crypt::decrypt(&data)?;
-    let data_serialized = serialize::bytes2json(&data_decrypted)?;
+    let data_serialized = convert::bytes2json(&data_decrypted)?;
     Ok(data_serialized)
 }
 

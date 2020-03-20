@@ -1,4 +1,6 @@
 use std::time;
+use generic_array::ArrayLength;
+use aes_gcm::aead::generic_array::GenericArray;
 
 // time to wait before retry when connecting to server fails
 pub const REFUSED_SLEEP_TIME: time::Duration = time::Duration::from_secs(30);
@@ -9,4 +11,4 @@ pub const PORT: u16 = 10001;
 // size of the header packet
 pub const HEADER_LENGTH: usize = 1024;
 // msg to send the server to indicate heacer received
-pub const ACK: &[u8] =  "ACK".as_bytes();
+pub const ACK: &[u8] = "ACK".as_bytes();

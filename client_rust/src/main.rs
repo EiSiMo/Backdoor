@@ -1,7 +1,7 @@
 use crate::communication::sock;
 use crate::commands::terminal;
+use crate::communication::convert;
 use std::error::Error;
-use json;
 
 pub mod communication;
 pub mod commands;
@@ -11,25 +11,21 @@ fn main() {
     loop {
         match sock::recv(&mut stream) {
             Ok(request) => {
-                println!("request: {:#}", request);
-                if request["cmd"] == "c" {
-                    match request["exe"].as_str() {
-                        Some(command) => {
-                            match terminal::execute_command(command) {
-                                Ok(out) => {
-                                    println!("stdout: {:?}", out);
-                                }
-                                Err (error) => {
-                                    println!("error: {}", error);
-                                    break
-                                }
+                let cmd = convert::jsonval2str(&request["exe"]);
+                match cmd {
+                    "c" => {
+                        let command = convert::jsonval2str(&request["exe"]);
+                        match terminal::execute_command(&command) {
+                            Ok(out) => {
+                                println!("stdout: {:?}", out);
                             }
-                        },
-                        None => {
-                            println!("error");
+                            Err (error) => {
+                                println!("error: {}", error);
+                                break
+                            }
                         }
                     }
-                    
+                    _ => {}
                 }
             },
             Err(error) => {
