@@ -51,7 +51,7 @@ client.py (line 158) with the output of generate_key.py (both have to be the sam
 - pynput
 - texttable
 
-install them with `pip install -r requirements.txt`
+install them with `pip3 install -r requirements.txt`
 
 ## TODO
 - get clipboard content
