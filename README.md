@@ -1,6 +1,4 @@
 # Backdoor
-[![License:MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
 A backdoor that is able to run on Windows and Linux.
 
 This is my first project on github so feel free to give tips.
