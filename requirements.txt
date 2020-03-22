@@ -1,6 +1,6 @@
-cmd2==1.0.0
-mss==5.0.0
-texttable==1.6.2
-opencv-python==4.2.0.32
-cryptography==2.8
-pynput==1.6.8
+cmd2>=1.0.0
+mss>=5.0.0
+texttable>=1.6.2
+opencv-python>=4.2.0.32
+cryptography>=2.8
+pynput>=1.6.8
