@@ -282,9 +282,9 @@ class Connection:
 
         # check the received data
             for expected_key, expected_type in zip(expected_dict.keys(), expected_dict.values()):
-                if expected_key not in received_dict.keys() or type(received_dict[expected_key]) == expected_type:
+                if expected_key not in received_dict.keys() or type(received_dict[expected_key]) != expected_type:
                     return False, None
-            return True, received_json
+            return True, received_dict
         except socket.error as error:
             self.user_interface.perror(f"SocketError from session {self.get_index_by_connection(connection)}: {error}")
         except InvalidTag:
