@@ -168,7 +168,7 @@ class Server:
                         f"Error from session {self.connection.get_index_by_connection(connection)}: {response['error']}")
                 elif response["data"]:
                     self.user_interface.poutput(response["data"])
-                    
+
     def block_address(self, action, addresses, close_existing):
         if action == "add":
             for address in addresses:
@@ -259,7 +259,6 @@ class Connection:
         connection.recv(self.PACKET_SIZE)
         try:
             for packet_number in range(total_packets):
-                print("sending packet:", data[packet_number*self.PACKET_SIZE:(packet_number + 1) * self.PACKET_SIZE])
                 connection.sendall(data[packet_number*self.PACKET_SIZE:(packet_number + 1) * self.PACKET_SIZE])
                 sys.stdout.write(f"\r[*] sending {self.format_byte_length(len_data_total)} to {packet_number + 1 / (total_packets / 100)}% complete")
                 sys.stdout.flush()
