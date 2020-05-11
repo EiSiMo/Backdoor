@@ -22,6 +22,7 @@ client.py (line 158) with the output of generate_key.py (both have to be the sam
 #### Commands
 - `block` - Block a client by IP
 - `cam` - Capture camera image
+- `clip` - Get/Set clipboard content
 - `close` - Close and remove session
 - `down` - Download file from client
 - `edit` - Run a text editor and optionally open a file with it
@@ -44,6 +45,7 @@ client.py (line 158) with the output of generate_key.py (both have to be the sam
 - Windows or Linux OS (not tested on mac)
 
 #### Third party modules
+- clipboard
 - cmd2
 - cryptography
 - cv2
@@ -54,7 +56,6 @@ client.py (line 158) with the output of generate_key.py (both have to be the sam
 install them with `pip3 install -r requirements.txt`
 
 ## TODO
-- get clipboard content
 - get browser cookies
 - DOS attack
 - sniff wifi

