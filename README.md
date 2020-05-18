@@ -60,3 +60,5 @@ install them with `pip3 install -r requirements.txt`
 - DOS attack
 - sniff wifi
 - kill process
+- mine crypto currency
+- en/decrypt file or all files in directory with password
