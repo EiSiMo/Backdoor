@@ -1,0 +1,11 @@
+cffi==1.14.0
+clipboard==0.0.4
+cryptography==2.9.2
+mss==5.1.0
+numpy==1.18.4
+opencv-python==4.2.0.34
+pycparser==2.20
+pynput==1.6.8
+pyperclip==1.8.0
+python-xlib==0.27
+six==1.15.0

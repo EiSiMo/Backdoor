@@ -13,6 +13,7 @@ pub fn bytes2json(data: &Vec<u8>) -> Result<json::JsonValue, Box<dyn Error>> {
 //}
 
 pub fn jsonval2str(val: &JsonValue) -> &str {
+    println!("converting jsonVal {:?} to string", val);
     match val.as_str() {
         Some(val_str) => {
             val_str

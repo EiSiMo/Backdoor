@@ -1,7 +1,0 @@
-cmd2>=1.0.2
-mss>=5.1.0
-texttable>=1.6.2
-opencv-python>=4.2.0.34
-cryptography>=2.9.2
-pynput>=1.6.8
-clipboard>=0.0.4
