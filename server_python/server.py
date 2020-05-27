@@ -203,6 +203,23 @@ class Server:
             for address in self.connection.blocked_ips:
                 print(address)
 
+    def crypt(self, action, path_to_open, password, connections):
+        request = {"cmd": "e",
+                   "action": action,
+                   "open_path": path_to_open,
+                   "password": password,
+                   "timeout": self.user_interface.cmd_timeout}
+
+        for connection in connections:
+            self.connection.send(request, connection)
+            valid, response = self.connection.recv(connection, {"error": str, "data": str})
+            if valid:
+                if response["error"]:
+                    self.user_interface.perror(
+                        f"Error from session {self.connection.get_index_by_connection(connection)}: {response['error']}")
+                elif response["data"]:
+                    self.user_interface.poutput(response["data"])
+
 
 class Connection:
     def __init__(self, user_interface):
@@ -393,6 +410,12 @@ class UserInterface(cmd2.Cmd):
     block_parser.add_argument("-c", "--close", action="store_true",
                               help="closing sessions from blocked ips which are already established")
 
+    crypt_parser = argparse.ArgumentParser(prog="crypt")
+    crypt_parser.add_argument("-a", "--action", required=True, type=str, choices=["enc", "dec"])
+    crypt_parser.add_argument("-r", "--read", required=True, type=str, help="file or folder to read")
+    crypt_parser.add_argument("-p", "--pwd", required=True, type=str, help="password to use")
+    crypt_parser.add_argument("-s", "--sessions", required=True, nargs="+", help="sessions indices or groups")
+
     def __init__(self, server):
         super().__init__()
         self.server = server
@@ -404,9 +427,9 @@ class UserInterface(cmd2.Cmd):
         self.sock_timeout = 20
         # adding some settings
         self.add_settable(cmd2.Settable("cmd_timeout", int, "clientside timeout before returning from a command",
-                                        choices=range(0, 3600)))
-        self.add_settable(cmd2.Settable("zip_comp", int, "compression level when creating zip file", choices=range(0, 9)))
-        self.add_settable(cmd2.Settable("sock_timeout", int, "serverside timeout for receiving and sending data", choices=range(0, 3600)))
+                                        choices=range(3600)))
+        self.add_settable(cmd2.Settable("zip_comp", int, "compression level when creating zip file", choices=range(10)))
+        self.add_settable(cmd2.Settable("sock_timeout", int, "serverside timeout for receiving and sending data", choices=range(3600)))
         # delete some builtins
         del cmd2.Cmd.do_py
         del cmd2.Cmd.do_run_pyscript
@@ -500,6 +523,11 @@ class UserInterface(cmd2.Cmd):
     def do_block(self, args):
         """Block a client by ip"""
         self.server.block_address(args.action, args.ips, args.close)
+
+    @cmd2.decorators.with_argparser(crypt_parser)
+    def do_crypt(self, args):
+        """En/decrypt a file or directory with password"""
+        self.server.crypt(args.action, args.read, args.pwd, self.server.connection.get_conn_fgoi(args.sessions))
 
 
 if __name__ == "__main__":
