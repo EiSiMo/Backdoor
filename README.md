@@ -44,12 +44,12 @@ client.py (line 170) with the output of `python3 generate_key.py` (both have to 
 | `cam`     | Capture camera image                                                           |
 | `clip`    | Get/Set clipboard content                                                      |
 | `close`   | Close and remove session                                                       |
-| `down`    | Download file from client                                                       |
-| `edit`    | Run a text editor and optionally open a file with it                            |
+| `down`    | Download file from client                                                      |
+| `edit`    | Run a text editor and optionally open a file with it                           |
 | `exe`     | Remote execute terminal command                                                |
 | `exit`    | Exit server and close socket (not closing sessions)                            |
 | `group`   | Edit sessions groups memberships                                               |
-| `help`    | List available commands or provide detailed help for a specific command         |
+| `help`    | List available commands or provide detailed help for a specific command        |
 | `history` | View, run, edit, save, or clear previously entered commands                    |
 | `list`    | List connected sessions                                                        |
 | `logger`  | Start/Stop keylogger                                                           |
@@ -57,12 +57,12 @@ client.py (line 170) with the output of `python3 generate_key.py` (both have to 
 | `set`     | Set a settable parameter or show current settings of parameters                |
 | `shell`   | Execute a command as if at the OS prompt                                       |
 | `tag`     | Edit sessions tag                                                              |
-| `up`      | Upload file to client                                                           |
+| `up`      | Upload file to client                                                          |
 | `zip`     | Compress to zip archive                                                        |
+| `crypt`   | En/Decrypt a file or all files in a directory with a password                  |
 
 ## TODO
 - Extract browser cookies
 - Perform a DOS attack
 - Sniff wifi
-- mine crypto currency
-- En/decrypt file or all files in directory with password
+- Mine crypto currency
