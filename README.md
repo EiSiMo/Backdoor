@@ -3,7 +3,7 @@ A backdoor that is able to run on Windows and Linux.
 
 ## How to install
 First you should have [downloaded](https://www.python.org/downloads/ "Python.org") and installed Python 3.7 or a later version.
-#### Client (Python)
+
 Download the repository
 
     git clone https://github.com/EiSiMo/Backdoor
@@ -12,16 +12,7 @@ Navigate to the folder
 
     cd Backdoor/client_python
     
-Install the requirements
-
-    pip3 install -r requirements.txt
-
-#### Server (Python)
-Download the repository
-
-    git clone https://github.com/EiSiMo/Backdoor
-    
-Navigate to the folder
+or
 
     cd Backdoor/server_python
     
@@ -30,6 +21,7 @@ Install the requirements
     pip3 install -r requirements.txt
 
 If you want to know how to compile the client to a binary file check out [pyinstaller](https://www.pyinstaller.org/ "Pyinstaller.org").
+Tip: maybe the -w (no popup window) -F (all in one file) flags are interesting for you.
 
 ## How to use
 #### Client versions
