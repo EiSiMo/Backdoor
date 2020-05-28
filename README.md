@@ -34,8 +34,8 @@ list all connected clients with `list -s all`. You also can address multiple gro
 
 #### Encryption
 The backdoor uses AES encryption in GCM mode with a 256 bit key to encrypt the entire communication.
-When using the backdoor its important to change the key. To do so replace the key in server.py (line 217) and in
-client.py (line 170) with the output of `python3 generate_key.py` (both have to be the same).
+When using the backdoor its important to change the key. To do so replace the key in server.py (line 234) and in
+client.py (line 227) with the output of `python3 generate_key.py` (both have to be the same).
 
 #### Commands
 | Command   | Description                                                                    |
