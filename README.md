@@ -46,6 +46,7 @@ client.py (line 227) with the output of `python3 generate_key.py` (both have to 
 | `cam`     | Capture camera image                                                           |
 | `clip`    | Get/Set clipboard content                                                      |
 | `close`   | Close and remove session                                                       |
+| `crypt`   | En/Decrypt a file or all files in a directory with a password                  |
 | `down`    | Download file from client                                                      |
 | `edit`    | Run a text editor and optionally open a file with it                           |
 | `exe`     | Remote execute terminal command                                                |
@@ -61,7 +62,6 @@ client.py (line 227) with the output of `python3 generate_key.py` (both have to 
 | `tag`     | Edit sessions tag                                                              |
 | `up`      | Upload file to client                                                          |
 | `zip`     | Compress to zip archive                                                        |
-| `crypt`   | En/Decrypt a file or all files in a directory with a password                  |
 
 ## TODO
 - Extract browser cookies
