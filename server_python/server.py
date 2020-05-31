@@ -4,13 +4,15 @@ import base64
 import socket
 import json
 import threading
-1import argparse
+import argparse
 import math
+import os
 # non-standard libraries
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 import texttable
 import cmd2
 
@@ -233,11 +235,8 @@ class Connection:
         HOST = "127.0.0.1"
         PORT = 10001
 
-        self.privkey = rsa.generate_private_key(public_exponent=65537,
-                                                key_size=2048,
-                                                backend=default_backend())
-        self.pubkey_pem = self.privkey.public_key().public_bytes(encoding=serialization.Encoding.PEM,
-                                                                 format=serialization.PublicFormat.SubjectPublicKeyInfo)
+        self.aes_key = os.urandom(32)
+        self.crypter = AESGCM(self.aes_key)
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -269,21 +268,24 @@ class Connection:
                 if address in self.blocked_ips:
                     connection.close()
                 else:
-                    client_pubkey = self.exchange_keys(connection)
+                    self.exchange_keys(connection)
                     self.user_interface.async_alert("[*] client connected")
                     session = {"connection": connection,
                                "address": address,
                                "port": port,
                                "tag": "no tag",
-                               "groups": {"all"},
-                               "pubkey": client_pubkey}
+                               "groups": {"all"}}
                     self.sessions.append(session)
 
     def exchange_keys(self, connection):
-        self.sock.sendall(self.pubkey_pem)
-        pem = self.sock.recv(self.PACKET_SIZE) + self.sock.recv(self.PACKET_SIZE)
-        pubkey = serialization.load_pem_public_key(pem, default_backend())
-        return pubkey
+        client_pubkey_pem = connection.recv(2048)
+        client_pubkey = serialization.load_pem_public_key(client_pubkey_pem, default_backend())
+        aes_key_enc = client_pubkey.encrypt(self.aes_key,
+                                            padding.OAEP(
+                                                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                                                algorithm=hashes.SHA256(),
+                                                label=None))
+        connection.sendall(aes_key_enc)
 
     # credit: https://stackoverflow.com/questions/1094841/reusable-library-to-get-human-readable-version-of-file-size
     def format_byte_length(self, num, suffix='B'):
@@ -295,7 +297,7 @@ class Connection:
 
     def send(self, data: dict, connection):
         self.sock.settimeout(self.user_interface.sock_timeout)
-        data = self.encrypt(json.dumps(data).encode(self.CODEC), self.get_pubkey_by_connection(connection))
+        data = self.encrypt(json.dumps(data).encode(self.CODEC))
         len_data_total = len(data)
         total_packets = math.ceil(len_data_total / self.PACKET_SIZE)
         try:
@@ -303,7 +305,8 @@ class Connection:
             connection.recv(self.PACKET_SIZE)
             for packet_number in range(total_packets):
                 connection.sendall(data[packet_number * self.PACKET_SIZE:(packet_number + 1) * self.PACKET_SIZE])
-                sys.stdout.write(f"\r[*] sending {self.format_byte_length(len_data_total)} ({packet_number + 1 / (total_packets / 100)}% complete)")
+                sys.stdout.write(
+                    f"\r[*] sending {self.format_byte_length(len_data_total)} ({packet_number + 1 / (total_packets / 100)}% complete)")
                 sys.stdout.flush()
                 print()
         except socket.error as error:
@@ -317,7 +320,8 @@ class Connection:
             connection.send("READY".encode("utf8"))
             for _ in range(math.ceil(header / self.PACKET_SIZE)):
                 data.extend(connection.recv(self.PACKET_SIZE))
-                sys.stdout.write(f"\r[*] receiving {self.format_byte_length(header)} ({round(len(data) / (header / 100), 1)}% complete)")
+                sys.stdout.write(
+                    f"\r[*] receiving {self.format_byte_length(header)} ({round(len(data) / (header / 100), 1)}% complete)")
                 sys.stdout.flush()
                 print()
             received_dict = json.loads(self.decrypt(bytes(data)).decode(self.CODEC))
@@ -339,27 +343,17 @@ class Connection:
             self.user_interface.perror(f"ValueError from session {self.get_index_by_connection(connection)}")
         return False, None
 
-    def encrypt(self, data, pubkey):
-        return pubkey.encrypt(data,
-                              padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                                           algorithm=hashes.SHA256(),
-                                           label=None))
+    def encrypt(self, data):
+        nonce = os.urandom(12)
+        return nonce + self.crypter.encrypt(nonce, data, b"")
 
     def decrypt(self, cipher):
-        return self.privkey.decrypt(cipher,
-                                    padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                                                 algorithm=hashes.SHA256(),
-                                                 label=None))
+        return self.crypter.decrypt(cipher[:12], cipher[12:], b"")
 
     def get_index_by_connection(self, searched_connection):
         for index, session in enumerate(self.sessions):
             if searched_connection == session["connection"]:
                 return index
-
-    def get_pubkey_by_connection(self, searched_connection):
-        for session in self.sessions:
-            if searched_connection == session["connection"]:
-                return session["pubkey"]
 
 
 class UserInterface(cmd2.Cmd):
