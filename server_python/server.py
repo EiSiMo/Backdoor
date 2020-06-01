@@ -9,7 +9,7 @@ import math
 import os
 # non-standard libraries
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -235,9 +235,6 @@ class Connection:
         HOST = "127.0.0.1"
         PORT = 10001
 
-        self.aes_key = os.urandom(32)
-        self.crypter = AESGCM(self.aes_key)
-
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.bind((HOST, PORT))
@@ -268,24 +265,31 @@ class Connection:
                 if address in self.blocked_ips:
                     connection.close()
                 else:
-                    self.exchange_keys(connection)
-                    self.user_interface.async_alert("[*] client connected")
-                    session = {"connection": connection,
-                               "address": address,
-                               "port": port,
-                               "tag": "no tag",
-                               "groups": {"all"}}
-                    self.sessions.append(session)
+                    aes_key = os.urandom(32)
+                    if self.exchange_keys(connection, aes_key):
+                        self.user_interface.async_alert("[*] client connected")
+                        session = {"connection": connection,
+                                   "address": address,
+                                   "port": port,
+                                   "tag": "no tag",
+                                   "groups": {"all"},
+                                   "crypter": AESGCM(aes_key)}
+                        self.sessions.append(session)
 
-    def exchange_keys(self, connection):
-        client_pubkey_pem = connection.recv(2048)
-        client_pubkey = serialization.load_pem_public_key(client_pubkey_pem, default_backend())
-        aes_key_enc = client_pubkey.encrypt(self.aes_key,
-                                            padding.OAEP(
-                                                mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                                                algorithm=hashes.SHA256(),
-                                                label=None))
-        connection.sendall(aes_key_enc)
+    def exchange_keys(self, connection, aes_key):
+        try:
+            client_pubkey_pem = connection.recv(2048)
+            client_pubkey = serialization.load_pem_public_key(client_pubkey_pem, default_backend())
+            aes_key_enc = client_pubkey.encrypt(aes_key,
+                                                padding.OAEP(
+                                                    mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                                                    algorithm=hashes.SHA256(),
+                                                    label=None))
+            connection.sendall(aes_key_enc)
+            return True
+        except:
+            print("exchange keys: error")
+            return False
 
     # credit: https://stackoverflow.com/questions/1094841/reusable-library-to-get-human-readable-version-of-file-size
     def format_byte_length(self, num, suffix='B'):
@@ -297,7 +301,7 @@ class Connection:
 
     def send(self, data: dict, connection):
         self.sock.settimeout(self.user_interface.sock_timeout)
-        data = self.encrypt(json.dumps(data).encode(self.CODEC))
+        data = self.encrypt(json.dumps(data).encode(self.CODEC), self.get_crypter_by_connection(connection))
         len_data_total = len(data)
         total_packets = math.ceil(len_data_total / self.PACKET_SIZE)
         try:
@@ -324,7 +328,7 @@ class Connection:
                     f"\r[*] receiving {self.format_byte_length(header)} ({round(len(data) / (header / 100), 1)}% complete)")
                 sys.stdout.flush()
                 print()
-            received_dict = json.loads(self.decrypt(bytes(data)).decode(self.CODEC))
+            received_dict = json.loads(self.decrypt(bytes(data), self.get_crypter_by_connection(connection)).decode(self.CODEC))
 
             # check the received data
             for expected_key, expected_type in zip(expected_dict.keys(), expected_dict.values()):
@@ -343,17 +347,22 @@ class Connection:
             self.user_interface.perror(f"ValueError from session {self.get_index_by_connection(connection)}")
         return False, None
 
-    def encrypt(self, data):
+    def encrypt(self, data, crypter):
         nonce = os.urandom(12)
-        return nonce + self.crypter.encrypt(nonce, data, b"")
+        return nonce + crypter.encrypt(nonce, data, b"")
 
-    def decrypt(self, cipher):
-        return self.crypter.decrypt(cipher[:12], cipher[12:], b"")
+    def decrypt(self, cipher, crypter):
+        return crypter.decrypt(cipher[:12], cipher[12:], b"")
 
     def get_index_by_connection(self, searched_connection):
         for index, session in enumerate(self.sessions):
             if searched_connection == session["connection"]:
                 return index
+
+    def get_crypter_by_connection(self, searched_connection):
+        for session in self.sessions:
+            if searched_connection == session["connection"]:
+                return session["crypter"]
 
 
 class UserInterface(cmd2.Cmd):

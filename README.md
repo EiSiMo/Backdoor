@@ -26,7 +26,8 @@ Tip: maybe the -w (no popup window) -F (all in one file) flags are interesting f
 ## How to use
 #### Client versions
 The main version of the client is the Python version but I am currently working on a different one written in Rust
-because the Python client is very big if compiled (around 60 MiB). The goal is to implement the same functions on both versions so they are compatible with just one server. THE RUST VERSION IS VERY UNSTABLE AND YOU SHOULD NOT USE IT!
+because the Python client is very big if compiled (around 60 MiB). The goal is to implement the same functions on both
+ versions so they are compatible with just one server. THE RUST VERSION IS VERY UNSTABLE AND YOU SHOULD NOT USE IT!
 
 #### Group system
 The server uses a group system to control the clients. You can address them with their indices(0, 1, 2, ...) or with the
@@ -35,9 +36,8 @@ list all connected clients with `list -s all`. You also can address multiple gro
 `list -s 1 2 3`. If you select one client two times it will be addressed only once: `list -s all 1`.
 
 #### Encryption
-The backdoor uses AES encryption in GCM mode with a 256 bit key to encrypt the entire communication.
-When using the backdoor its important to change the key. To do so replace the key in server.py (line 234) and in
-client.py (line 227) with the output of `python3 generate_key.py` (both have to be the same).
+The backdoor uses 2048 bit RSA to exchange the AES key which the server generates. Every sessions has its own AES key.
+AES is used in the 256 bit GCM mode.
 
 #### Commands
 | Command   | Description                                                                    |
