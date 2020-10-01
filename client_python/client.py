@@ -1,13 +1,13 @@
 # standard python libraries
-import time
-import subprocess
-import base64
-import socket
-import sys
-import os
-import math
-import zipfile
-import json
+import time # For showing the time
+import subprocess # For running System Commands
+import base64 # For encoding the data so that it is easy for transport
+import socket # For making connection
+import sys 
+import os # For running commands which doesn't depend on the oprating system
+import math # For calculation
+import zipfile 
+import json # For reliably transporting of data
 import multiprocessing
 import hashlib
 # non-standard python libraries
