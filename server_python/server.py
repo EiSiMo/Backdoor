@@ -2,7 +2,7 @@
 import sys
 import base64
 import socket
-import json
+import pickle
 import threading
 import argparse
 import math
@@ -281,13 +281,16 @@ class Connection:
 
     def exchange_keys(self, connection, aes_key):
         try:
+            # receive rsa pubkey in pem format
             client_pubkey_pem = connection.recv(2048)
             client_pubkey = serialization.load_pem_public_key(client_pubkey_pem, default_backend())
+            # encode the rsa key
             aes_key_enc = client_pubkey.encrypt(aes_key,
                                                 padding.OAEP(
                                                     mgf=padding.MGF1(algorithm=hashes.SHA256()),
                                                     algorithm=hashes.SHA256(),
                                                     label=None))
+            # send the rsa key to the client
             connection.sendall(aes_key_enc)
             return True
         except socket.error:
@@ -305,7 +308,7 @@ class Connection:
 
     def send(self, data: dict, connection):
         self.sock.settimeout(self.user_interface.sock_timeout)
-        data = self.encrypt(json.dumps(data).encode(self.CODEC), self.get_crypter_by_connection(connection))
+        data = self.encrypt(pickle.dumps(data), self.get_crypter_by_connection(connection))
         len_data_total = len(data)
         total_packets = math.ceil(len_data_total / self.PACKET_SIZE)
         try:
@@ -314,7 +317,7 @@ class Connection:
             for packet_number in range(total_packets):
                 connection.sendall(data[packet_number * self.PACKET_SIZE:(packet_number + 1) * self.PACKET_SIZE])
                 sys.stdout.write(
-                    f"\r[↑] {self.format_byte_length(len_data_total)} ({packet_number + 1 / (total_packets / 100)}% complete)")
+                    f"\r[↑] {self.format_byte_length(len_data_total)} ({packet_number + 1 / (total_packets / 100)}%)")
                 sys.stdout.flush()
                 print()
         except socket.error as error:
@@ -332,7 +335,7 @@ class Connection:
                     f"\r[↓] {self.format_byte_length(header)} ({round(len(data) / (header / 100), 1)}% complete)")
                 sys.stdout.flush()
                 print()
-            received_dict = json.loads(self.decrypt(bytes(data), self.get_crypter_by_connection(connection)).decode(self.CODEC))
+            received_dict = pickle.loads(self.decrypt(bytes(data), self.get_crypter_by_connection(connection)))
 
             # check the received data
             for expected_key, expected_type in zip(expected_dict.keys(), expected_dict.values()):
@@ -343,8 +346,6 @@ class Connection:
             self.user_interface.perror(f"SocketError from session {self.get_index_by_connection(connection)}: {error}")
         except InvalidTag:
             self.user_interface.perror(f"InvalidTag from session {self.get_index_by_connection(connection)}")
-        except json.decoder.JSONDecodeError:
-            self.user_interface.perror(f"JSONDecodeError from session {self.get_index_by_connection(connection)}")
         except UnicodeDecodeError:
             self.user_interface.perror(f"UnicodeDecodeError from session {self.get_index_by_connection(connection)}")
         except ValueError:

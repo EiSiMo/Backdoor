@@ -7,7 +7,7 @@ import sys
 import os
 import math
 import zipfile
-import json
+import pickle
 import multiprocessing
 import hashlib
 # non-standard python libraries
@@ -269,7 +269,7 @@ class Connection:
                                                  label=None))
 
     def send(self, data: dict):
-        data = self.encrypt(json.dumps(data.copy()).encode(self.CODEC))
+        data = self.encrypt(pickle.dumps(data.copy()))
         self.sock.sendall(str(len(data)).encode("utf8"))
         self.sock.recv(self.PACKET_SIZE)
         self.sock.sendall(data)
@@ -280,7 +280,7 @@ class Connection:
         data = bytearray()
         for _ in range(math.ceil(header / self.PACKET_SIZE)):
             data.extend(self.sock.recv(self.PACKET_SIZE))
-        return json.loads(self.decrypt(bytes(data)).decode(self.CODEC))
+        return pickle.loads(self.decrypt(bytes(data)))
 
     def encrypt(self, data):
         nonce = os.urandom(12)
