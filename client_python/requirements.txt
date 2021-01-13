@@ -1,6 +1,6 @@
 cffi==1.14.0
 clipboard==0.0.4
-cryptography==2.9.2
+cryptography==3.2
 mss==5.1.0
 numpy==1.18.4
 opencv-python==4.2.0.34
