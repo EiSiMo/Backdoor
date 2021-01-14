@@ -68,3 +68,4 @@ AES is used in the 256 bit GCM mode.
 - Perform a DOS attack
 - Sniff wifi
 - Mine crypto currency
+- Search and use printers in the network
