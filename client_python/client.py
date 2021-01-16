@@ -89,7 +89,7 @@ class Client:
         response = {"data": str(), "error": str()}
         try:
             with open(path, "rb") as file:
-                response["data"] = base64.b64encode(file.read()).decode(self.connection.CODEC)
+                response["data"] = base64.b64encode(file.read()).decode("utf8")
         except FileNotFoundError:
             response["error"] = "FileNotFoundError"
         except PermissionError:
@@ -228,8 +228,7 @@ class Client:
 
 class Connection:
     def __init__(self):
-        self.CODEC = "utf8"
-        self.PACKET_SIZE = 1024
+        self.PACKET_SIZE = 4096
 
         HOST = "127.0.0.1"
         PORT = 10001
@@ -239,14 +238,16 @@ class Connection:
                                                 backend=default_backend())
         self.pubkey_pem = self.privkey.public_key().public_bytes(encoding=serialization.Encoding.PEM,
                                                                  format=serialization.PublicFormat.SubjectPublicKeyInfo)
-
-        if len(sys.argv) == 3:
-            try:
-                HOST = str(sys.argv[1])
-                PORT = int(sys.argv[2])
-            except ValueError:  # InvalidCommandlineArguments
-                HOST = "127.0.0.1"
-                PORT = 10001
+        # if host or port are given as cmd line args, use them (useful to open another connection on the same device)
+        try:
+            host = str(sys.argv[1])
+            port = int(sys.argv[2])
+            HOST = host
+            PORT = port
+        except ValueError:
+            pass
+        except IndexError:
+            pass
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
