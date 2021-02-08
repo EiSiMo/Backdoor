@@ -1,11 +1,5 @@
-cffi==1.14.4
-clipboard==0.0.4
-cryptography==3.2
-mss==6.1.0
-numpy==1.19.5
-opencv-python==4.5.1.48
-pycparser==2.20
-pynput==1.7.2
-pyperclip==1.8.1
-python-xlib==0.29
-six==1.15.0
+mss~=6.1.0
+opencv-python~=4.5.1.48
+pynput~=1.7.2
+pyttsx3~=2.90
+clipboard~=0.0.4

