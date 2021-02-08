@@ -59,6 +59,7 @@ AES is used in the 256 bit GCM mode.
 | `screen`  | Capture screen image                                                           |
 | `set`     | Set a settable parameter or show current settings of parameters                |
 | `shell`   | Execute a command as if at the OS prompt                                       |
+| `speak`   | Read a given text out loud                                                     |
 | `tag`     | Edit sessions tag                                                              |
 | `up`      | Upload file to client                                                          |
 | `zip`     | Compress to zip archive                                                        |
